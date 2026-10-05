@@ -1,0 +1,19 @@
+{
+  "name": "guc-demo-video",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.jsx",
+    "audio": "python scripts/make_audio.py",
+    "still": "remotion still src/index.jsx Film",
+    "render": "remotion render src/index.jsx Film"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@remotion/google-fonts": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.0"
+  }
+}

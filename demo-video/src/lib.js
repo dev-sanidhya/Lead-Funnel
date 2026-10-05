@@ -12,6 +12,8 @@ export const useT = () => {
   return f / fps;
 };
 
+export const useVertical = () => { const { width, height } = useVideoConfig(); return height > width; };
+
 export const E = {
   out: Easing.bezier(0.16, 1, 0.3, 1),
   soft: Easing.bezier(0.22, 1, 0.36, 1),

@@ -4,6 +4,17 @@ import { Film } from './Film.jsx';
 import { TOTAL } from './timeline.js';
 
 export const Root = () => (
+  <>
+  <Composition
+    id="FilmVertical"
+    component={Film}
+    width={1080}
+    height={1920}
+    fps={30}
+    durationInFrames={Math.round(TOTAL * 30)}
+    defaultProps={{ fps: 30 }}
+    calculateMetadata={({ props }) => ({ fps: props.fps, durationInFrames: Math.round(TOTAL * props.fps) })}
+  />
   <Composition
     id="Film"
     component={Film}
@@ -14,4 +25,5 @@ export const Root = () => (
     defaultProps={{ fps: 30 }}
     calculateMetadata={({ props }) => ({ fps: props.fps, durationInFrames: Math.round(TOTAL * props.fps) })}
   />
+  </>
 );

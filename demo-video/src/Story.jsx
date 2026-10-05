@@ -1,25 +1,37 @@
 import React from 'react';
-import { C, INTER, SERIF, E, tw, kf, typed } from './lib.js';
+import { C, INTER, SERIF, E, tw, kf, typed, useVertical } from './lib.js';
 import { S, FIELDS, VERDICT_AT } from './timeline.js';
 import { Phone } from './Phone.jsx';
 import { FeedScreen, FormSheet, SuccessOverlay, DMScreen } from './IGScreens.jsx';
 
 /* ---------------- phone choreography ---------------- */
-export const phonePose = (t) =>
-  kf(t, [
-    [S.ad - 0.2, { x: 1360, y: 1700, s: 0.96, ry: -22, rx: 8, o: 0 }],
-    [S.ad + 1.0, { x: 1360, y: 540, s: 0.96, ry: -9, rx: 2, o: 1 }, E.out],
-    [S.ad + 8.4, { x: 1360, y: 540, s: 0.96, ry: -9, rx: 2, o: 1 }],
-    [S.chat + 0.4, { x: 590, y: 540, s: 1.13, ry: 0, rx: 0, o: 1 }, E.smooth],
-    [S.zoom, { x: 590, y: 540, s: 1.13, ry: 0, rx: 0, o: 1 }],
-    [S.zoom + 1.9, { x: 330, y: 560, s: 0.52, ry: 14, rx: 0, o: 1 }, E.smooth],
-    [S.zoom + 4.6, { x: 330, y: 560, s: 0.52, ry: 14, rx: 0, o: 1 }],
-    [S.zoom + 6.0, { x: -260, y: 560, s: 0.52, ry: 24, rx: 0, o: 0 }, E.inOut],
-  ]);
+export const phonePose = (t, V = false) =>
+  V
+    ? kf(t, [
+      [S.ad - 0.2, { x: 540, y: 2400, s: 1.42, ry: -14, rx: 6, o: 0 }],
+      [S.ad + 1.0, { x: 540, y: 1235, s: 1.42, ry: -5, rx: 1, o: 1 }, E.out],
+      [S.ad + 8.4, { x: 540, y: 1235, s: 1.42, ry: -5, rx: 1, o: 1 }],
+      [S.chat + 0.4, { x: 540, y: 775, s: 1.66, ry: 0, rx: 0, o: 1 }, E.smooth],
+      [S.zoom, { x: 540, y: 775, s: 1.66, ry: 0, rx: 0, o: 1 }],
+      [S.zoom + 1.9, { x: 540, y: 330, s: 0.5, ry: 0, rx: 0, o: 1 }, E.smooth],
+      [S.zoom + 4.6, { x: 540, y: 330, s: 0.5, ry: 0, rx: 0, o: 1 }],
+      [S.zoom + 6.0, { x: 540, y: -320, s: 0.5, ry: 0, rx: 0, o: 0 }, E.inOut],
+    ])
+    : kf(t, [
+      [S.ad - 0.2, { x: 1360, y: 1700, s: 0.96, ry: -22, rx: 8, o: 0 }],
+      [S.ad + 1.0, { x: 1360, y: 540, s: 0.96, ry: -9, rx: 2, o: 1 }, E.out],
+      [S.ad + 8.4, { x: 1360, y: 540, s: 0.96, ry: -9, rx: 2, o: 1 }],
+      [S.chat + 0.4, { x: 590, y: 540, s: 1.13, ry: 0, rx: 0, o: 1 }, E.smooth],
+      [S.zoom, { x: 590, y: 540, s: 1.13, ry: 0, rx: 0, o: 1 }],
+      [S.zoom + 1.9, { x: 330, y: 560, s: 0.52, ry: 14, rx: 0, o: 1 }, E.smooth],
+      [S.zoom + 4.6, { x: 330, y: 560, s: 0.52, ry: 14, rx: 0, o: 1 }],
+      [S.zoom + 6.0, { x: -260, y: 560, s: 0.52, ry: 24, rx: 0, o: 0 }, E.inOut],
+    ]);
 
 export const PhoneStory = ({ t }) => {
+  const V = useVertical();
   if (t < S.ad - 0.3 || t > S.zoom + 6.1) return null;
-  const p = phonePose(t);
+  const p = phonePose(t, V);
   const a = t - S.ad;
   const c = t - S.chat;
   const dm = tw(a, 7.7, 8.5, 0, 1, E.soft);
@@ -46,6 +58,7 @@ const STEPS = [
   { n: '03', at: 7.8, until: 9.6, h: [['Straight into their '], ['Instagram DMs.', 1]], sub: 'No new app to install. No waiting on your team.' },
 ];
 export const AdCaptions = ({ t }) => {
+  const V = useVertical();
   const a = t - S.ad;
   return (
     <>
@@ -55,14 +68,14 @@ export const AdCaptions = ({ t }) => {
         const op = pin * (1 - pout);
         if (op <= 0.001) return null;
         return (
-          <div key={s.n} style={{ position: 'absolute', left: 150, top: 330, width: 760, opacity: op, transform: `translateY(${(1 - pin) * 36 - pout * 24}px)`, filter: `blur(${(1 - pin) * 6 + pout * 6}px)` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontFamily: INTER, fontWeight: 600, fontSize: 20, letterSpacing: '0.24em', color: C.mint }}>
+          <div key={s.n} style={{ position: 'absolute', left: V ? 70 : 150, top: V ? 150 : 330, width: V ? 940 : 760, opacity: op, transform: `translateY(${(1 - pin) * 36 - pout * 24}px)`, filter: `blur(${(1 - pin) * 6 + pout * 6}px)` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontFamily: INTER, fontWeight: 600, fontSize: V ? 26 : 20, letterSpacing: '0.24em', color: C.mint }}>
               <span>{s.n}</span><span style={{ width: 56, height: 1, background: C.mint, opacity: 0.6 }} /><span style={{ color: C.faint }}>03</span>
             </div>
-            <div style={{ fontFamily: INTER, fontWeight: 600, fontSize: 82, lineHeight: 1.04, letterSpacing: '-0.048em', color: C.ink, marginTop: 26 }}>
+            <div style={{ fontFamily: INTER, fontWeight: 600, fontSize: V ? 82 : 82, lineHeight: 1.04, letterSpacing: '-0.048em', color: C.ink, marginTop: V ? 20 : 26 }}>
               {s.h.map(([txt, em], i) => (em ? <span key={i} style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, color: C.mint, fontSize: '1.08em', letterSpacing: '-0.01em' }}>{txt}</span> : <span key={i}>{txt}</span>))}
             </div>
-            <div style={{ fontFamily: INTER, fontSize: 28, lineHeight: 1.4, color: C.mute, marginTop: 26, maxWidth: 620 }}>{s.sub}</div>
+            <div style={{ fontFamily: INTER, fontSize: V ? 34 : 28, lineHeight: 1.38, color: C.mute, marginTop: V ? 20 : 26, maxWidth: V ? 900 : 620 }}>{s.sub}</div>
           </div>
         );
       })}
@@ -142,6 +155,52 @@ export const ProfilePanel = ({ t }) => {
       <div style={{ fontFamily: INTER, fontSize: 19, color: C.faint, marginTop: 22, lineHeight: 1.5, maxWidth: 700 }}>
         The AI understands the conversation. Your rules decide the outcome, so budgets and call times are never left to a guess.
       </div>
+    </div>
+  );
+};
+
+/* ---------------- vertical layout: the lead profile as a compact chip cloud under the phone ---------------- */
+const SHORT = {
+  Brand: 'Mira Skin · D2C skincare',
+  'Looking for': 'Launch PR + seeding',
+  'Target cities': 'Mumbai · Delhi · Bangalore',
+  Budget: '₹5 to 8 L · above minimum',
+  'Wants to start': 'Within a month',
+  'Creator history': '~20 creators, untracked',
+  'Call booked': 'Tomorrow, 5:00 PM',
+};
+export const ProfileChips = ({ t }) => {
+  const c = t - S.chat;
+  const enter = tw(c, 0.4, 1.2, 0, 1, E.out);
+  const exit = tw(t, S.zoom + 0.1, S.zoom + 0.9, 0, 1, E.inOut);
+  if (enter <= 0 || exit >= 1) return null;
+  const done = c >= VERDICT_AT;
+  const v = tw(c, VERDICT_AT, VERDICT_AT + 0.9, 0, 1, E.out);
+  return (
+    <div style={{ position: 'absolute', left: 54, top: 1528, width: 972, opacity: enter * (1 - exit), transform: `translateY(${(1 - enter) * 40 + exit * 30}px)` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontFamily: INTER, fontSize: 24, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: C.mint, marginBottom: 16 }}>
+        <span style={{ width: 11, height: 11, borderRadius: '50%', background: C.mint, boxShadow: `0 0 ${10 + 8 * Math.sin(c * 5)}px ${C.mint}` }} />
+        {done ? 'Lead qualified' : 'Aria is reading the chat'}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        {[...FIELDS].sort((x, y) => x.at - y.at).map((f) => {
+          const p = tw(c, f.at, f.at + 0.6, 0, 1, E.out);
+          if (c < f.at) return null;
+          const flash = 1 - tw(c, f.at + 0.1, f.at + 1.4, 0, 1, E.out);
+          return (
+            <div key={f.k} style={{ opacity: p, transform: `translateY(${(1 - p) * 14}px) scale(${0.95 + 0.05 * p})`, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderRadius: 16, fontFamily: INTER, fontSize: 26, fontWeight: 560, letterSpacing: '-0.02em', color: C.ink, background: `rgba(255,255,255,${0.07 + 0.1 * flash})`, border: `1px solid rgba(94,234,212,${0.2 + 0.5 * flash})` }}>
+              <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.mint }}>{f.k === 'Looking for' ? 'Need' : f.k === 'Wants to start' ? 'Start' : f.k === 'Target cities' ? 'Cities' : f.k === 'Creator history' ? 'History' : f.k === 'Call booked' ? 'Call' : f.k}</span>
+              {SHORT[f.k]}
+            </div>
+          );
+        })}
+      </div>
+      {done && (
+        <div style={{ marginTop: 16, height: 76, borderRadius: 18, border: '1px solid rgba(52,211,153,.5)', background: 'linear-gradient(90deg, rgba(52,211,153,.24), rgba(94,234,212,.08))', display: 'flex', alignItems: 'center', padding: '0 26px', gap: 14, opacity: v, transform: `translateY(${(1 - v) * 14}px)`, boxShadow: `0 0 ${50 * v}px rgba(52,211,153,${0.3 * v})` }}>
+          <Check p={1} />
+          <div style={{ fontFamily: INTER, fontSize: 30, fontWeight: 650, color: C.ink, letterSpacing: '-0.02em' }}>Qualified. Assigned to Ananya Rao.</div>
+        </div>
+      )}
     </div>
   );
 };

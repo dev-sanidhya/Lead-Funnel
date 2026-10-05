@@ -105,6 +105,39 @@ const RAW = `
 .crm .msg.in { align-self:flex-start; background:var(--surface); border:1px solid var(--line); border-bottom-left-radius:4px; }
 .crm .msg.bot { align-self:flex-end; background:var(--ink); color:#fff; border-bottom-right-radius:4px; }
 .crm .toast { position:absolute; left:50%; bottom:26px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:11px 18px; border-radius:11px; z-index:60; font-weight:550; font-size:13.5px; display:flex; align-items:center; gap:10px; box-shadow:0 14px 40px rgba(0,0,0,.3); white-space:nowrap; }
+
+.crm.m { width:480px; height:853px; flex-direction:column; }
+.crm.m aside { display:none; }
+.crm.m main { height:791px; flex:none; width:480px; }
+.crm.m .page { padding:34px 20px 0; }
+.crm.m h1 { font-size:28px; }
+.crm.m .page-head { margin-bottom:16px; }
+.crm.m .page-head p { font-size:14px; }
+.crm.m .tiles { grid-template-columns:1fr 1fr; margin-bottom:22px; }
+.crm.m .tile { border-bottom:1px solid var(--line); padding:14px 16px; }
+.crm.m .tile:nth-child(2n) { border-right:0; }
+.crm.m .tile:nth-last-child(-n+2) { border-bottom:0; }
+.crm.m .tile .n { font-size:26px; }
+.crm.m .two { grid-template-columns:1fr; gap:20px; }
+.crm.m .callrow { grid-template-columns:86px minmax(0,1fr); gap:12px; }
+.crm.m .callrow > :last-child { grid-column:2 / -1; }
+.crm.m .set-grid { grid-template-columns:1fr; gap:14px; }
+.crm.m .subnav { display:none; }
+.crm.m .bigmoney { font-size:36px; }
+.crm.m .tabbar { position:absolute; left:0; right:0; bottom:0; height:62px; border-top:1px solid var(--line); background:#fff; display:flex; z-index:20; }
+.crm.m .tabbar .tb { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:11px; font-weight:600; color:var(--muted); position:relative; }
+.crm.m .tabbar .tb.on { color:var(--ink); } .crm.m .tabbar .tb.on svg { color:var(--brand); }
+.crm.m .tabbar .badge { position:absolute; top:7px; left:calc(50% + 6px); background:var(--urgent); color:#fff; font-size:10px; font-weight:700; border-radius:9px; min-width:16px; height:16px; display:grid; place-items:center; }
+.crm.m .stagechips { display:flex; gap:6px; margin-bottom:16px; }
+.crm.m .stagechip { padding:6px 11px; border-radius:20px; border:1px solid var(--line-strong); font-size:12.5px; font-weight:600; color:var(--muted); display:flex; gap:6px; align-items:center; white-space:nowrap; }
+.crm.m .stagechip.on { background:var(--ink); border-color:var(--ink); color:#fff; }
+.crm.m .stagechip i { font-style:normal; opacity:.6; }
+.crm.m .sheet { position:absolute; left:0; right:0; bottom:0; height:650px; background:var(--bg); border-radius:20px 20px 0 0; z-index:31; display:flex; flex-direction:column; box-shadow:0 -20px 60px rgba(0,0,0,.3); }
+.crm.m .d-head { padding:14px 18px 12px; }
+.crm.m .d-head .pill.brand { display:none; }
+.crm.m .scrim { background:rgba(4,8,8,.86); }
+.crm.m .d-head .mute { white-space:nowrap; font-size:12.5px !important; }
+.crm.m .d-inner { padding:14px 18px 80px; }
 `;
 const CSS = RAW.replace(/(^|\})\s*([^{}]+)\{/g, (m, a, sel) => `${a}\n${sel.trim()}{`);
 
@@ -301,57 +334,93 @@ export const RulesView = ({ slide = 3 }) => {
 /* ---------------- lead drawer ---------------- */
 const Fld = ({ k, v }) => (<div className="fld"><label>{k}</label><div className="in">{v}</div></div>);
 
-export const Drawer = ({ scroll = 0 }) => (
-  <div className="drawer">
-    <div className="d-head">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div className="avatar lg">RM</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 19, fontWeight: 650, letterSpacing: '-0.02em' }}>Riya Mehta</div>
-          <div className="mute" style={{ fontSize: 13 }}>Mira Skin · via Instagram · 2 min ago</div>
-        </div>
-        <span className="pill active">Active</span><span className="pill brand">Meta ad</span>
-        <Ic n="x" />
+export const DrawerHead = () => (
+  <div className="d-head">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div className="avatar lg">RM</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 19, fontWeight: 650, letterSpacing: '-0.02em' }}>Riya Mehta</div>
+        <div className="mute" style={{ fontSize: 13 }}>Mira Skin · via Instagram · 2 min ago</div>
       </div>
+      <span className="pill active">Active</span><span className="pill brand">Meta ad</span>
+      <Ic n="x" />
     </div>
-    <div className="d-body">
-      <div className="d-inner" style={{ transform: `translateY(${-scroll}px)` }}>
-        <div className="next ok"><Ic n="cal" /><div><b>Call tomorrow at 5:00 PM</b>Ananya Rao will call Riya on +91 98765 43210. A reminder goes out an hour before.</div></div>
-        <div className="quick-head"><h3>Quick summary</h3><span className="mute" style={{ fontSize: 12.5 }}>Written by the assistant</span></div>
-        <div className="glance">
-          Riya runs <b>Mira Skin</b>, a D2C skincare brand launching a new serum. She wants launch PR and influencer seeding across Mumbai, Delhi and Bangalore. Her budget of <b>₹5 to 8 lakh</b> clears your ₹3 L minimum and she would like to start within a month. She has tried about 20 micro-influencers on her own, without tracking results.
-          <div className="said">“Evenings are best to reach me.”</div>
+  </div>
+);
+
+export const DrawerBody = ({ scroll = 0 }) => (
+  <div className="d-body">
+    <div className="d-inner" style={{ transform: `translateY(${-scroll}px)` }}>
+      <div className="next ok"><Ic n="cal" /><div><b>Call tomorrow at 5:00 PM</b>Ananya Rao will call Riya on +91 98765 43210. A reminder goes out an hour before.</div></div>
+      <div className="quick-head"><h3>Quick summary</h3><span className="mute" style={{ fontSize: 12.5 }}>Written by the assistant</span></div>
+      <div className="glance">
+        Riya runs <b>Mira Skin</b>, a D2C skincare brand launching a new serum. She wants launch PR and influencer seeding across Mumbai, Delhi and Bangalore. Her budget of <b>₹5 to 8 lakh</b> clears your ₹3 L minimum and she would like to start within a month. She has tried about 20 micro-influencers on her own, without tracking results.
+        <div className="said">“Evenings are best to reach me.”</div>
+      </div>
+      <div className="sec" style={{ marginTop: 24 }}>
+        <h3>Details</h3>
+        <div className="facts">
+          <Fld k="What they want" v="Launch PR + influencer seeding" />
+          <Fld k="Brand" v="Mira Skin · D2C skincare" />
+          <Fld k="Target cities" v="Mumbai, Delhi, Bangalore" />
+          <Fld k="Budget (INR)" v="500000 to 800000" />
+          <Fld k="Wants to start" v="Within a month" />
+          <Fld k="Creator history" v="~20 micro-influencers, untracked" />
+          <Fld k="Phone" v="+91 98765 43210" />
+          <Fld k="Best time to reach them" v="Evenings" />
         </div>
-        <div className="sec" style={{ marginTop: 24 }}>
-          <h3>Details</h3>
-          <div className="facts">
-            <Fld k="What they want" v="Launch PR + influencer seeding" />
-            <Fld k="Brand" v="Mira Skin · D2C skincare" />
-            <Fld k="Target cities" v="Mumbai, Delhi, Bangalore" />
-            <Fld k="Budget (INR)" v="500000 to 800000" />
-            <Fld k="Wants to start" v="Within a month" />
-            <Fld k="Creator history" v="~20 micro-influencers, untracked" />
-            <Fld k="Phone" v="+91 98765 43210" />
-            <Fld k="Best time to reach them" v="Evenings" />
-          </div>
+      </div>
+      <div className="sec">
+        <h3><Ic n="calls" />Call</h3>
+        <div className="callcard">
+          <div className="avatar" style={{ width: 40, height: 40 }}><Ic n="cal" /></div>
+          <div style={{ flex: 1 }}><div style={{ fontWeight: 650, fontSize: 15 }}>Tomorrow · 5:00 PM IST</div><div className="mute" style={{ fontSize: 13 }}>With Ananya Rao, Brand Lead · matched on beauty and D2C</div></div>
+          <span className="pill brand">Scheduled</span>
         </div>
-        <div className="sec">
-          <h3><Ic n="calls" />Call</h3>
-          <div className="callcard">
-            <div className="avatar" style={{ width: 40, height: 40 }}><Ic n="cal" /></div>
-            <div style={{ flex: 1 }}><div style={{ fontWeight: 650, fontSize: 15 }}>Tomorrow · 5:00 PM IST</div><div className="mute" style={{ fontSize: 13 }}>With Ananya Rao, Brand Lead · matched on beauty and D2C</div></div>
-            <span className="pill brand">Scheduled</span>
-          </div>
-        </div>
-        <div className="sec">
-          <h3><Ic n="chat" />Conversation</h3>
-          <div className="chat">
-            {CHAT.map((m) => (<div key={m.id} className={`msg ${m.who === 'me' ? 'in' : 'bot'}`}>{m.text}</div>))}
-          </div>
+      </div>
+      <div className="sec">
+        <h3><Ic n="chat" />Conversation</h3>
+        <div className="chat">
+          {CHAT.map((m) => (<div key={m.id} className={`msg ${m.who === 'me' ? 'in' : 'bot'}`}>{m.text}</div>))}
         </div>
       </div>
     </div>
   </div>
 );
+
+export const Drawer = ({ scroll = 0 }) => (
+  <div className="drawer"><DrawerHead /><DrawerBody scroll={scroll} /></div>
+);
+
+/* ---------- mobile layout pieces ---------- */
+export const TabBar = ({ view }) => (
+  <div className="tabbar">
+    {[['today', 'Today', 'today', 3], ['leads', 'Leads', 'leads'], ['calls', 'Calls', 'calls'], ['settings', 'Rules', 'gear']].map(([k, label, ico, badge]) => (
+      <div key={k} className={`tb ${view === k ? 'on' : ''}`}><Ic n={ico} />{label}{badge ? <span className="badge">{badge}</span> : null}</div>
+    ))}
+  </div>
+);
+
+export const CARD_HM = 186;
+export const LeadsListM = ({ arrive = 1, glow = 0 }) => {
+  const L = LEADS;
+  return (
+    <div className="page">
+      <div className="page-head"><div><h1>Leads</h1><p>Sorted by what to do next.</p></div></div>
+      <div className="stagechips">
+        <span className="stagechip">In conversation <i>2</i></span>
+        <span className="stagechip on">Active <i>{2 + (arrive > 0.5 ? 1 : 0)}</i></span>
+        <span className="stagechip">Nurture <i>2</i></span>
+        <span className="stagechip">Not a fit <i>2</i></span>
+      </div>
+      <div style={{ height: arrive * CARD_HM, position: 'relative' }}>
+        <div style={{ opacity: Math.min(1, arrive * 1.6), transform: `translateY(${(1 - arrive) * -24}px)`, boxShadow: glow ? `0 0 0 ${2 + glow * 3}px rgba(15,157,119,${0.55 * glow}), 0 10px 40px rgba(15,157,119,${0.35 * glow})` : 'none', borderRadius: 10, background: '#fff' }}>
+          <LeadCard l={L.riya} />
+        </div>
+      </div>
+      <LeadCard l={L.kabir} /><LeadCard l={L.sneha} />
+    </div>
+  );
+};
 
 export const Toast = ({ children }) => (<div className="toast"><span className="dot" style={{ background: '#34d399' }} />{children}</div>);

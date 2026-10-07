@@ -64,3 +64,9 @@ test('the brief reads naturally from form answers', () => {
   assert.match(b, /Budget about/);
   assert.doesNotMatch(b, /want to start we/i);
 });
+
+test('after the call is marked done, the next step stops asking for a call time', () => {
+  const done = nextStepFor({ stage: 'active', phone: '98765', callback_at: NOW - 3600000, callback_status: 'done', callback_text: 'today 11 am', notes: 'Site visit booked for Saturday.', meta: { fu: { done_at: NOW - 1800000 } }, channel: 'instagram', last_inbound_at: NOW }, S(), NOW);
+  assert.match(done.text, /^Call done\. Site visit booked/);
+  assert.strictEqual(done.tone, 'idle');
+});

@@ -114,6 +114,7 @@ function nextStepFor(lead, settings, now = Date.now()) {
     if (top && top.kind === 'call_overdue') return { text: `The call was due ${when}. Check it happened, then mark it done.`, tone: 'urgent' };
     return { text: `${lead.designer ? `${lead.designer} to call` : 'Call'} ${when}.${noPhone ? ' Get a phone number first.' : ''}`, tone: 'ok' };
   }
+  if (lead.stage === 'active' && fu.done_at) return { text: lead.notes ? `Call done. ${String(lead.notes).replace(/^call done\.?\s*/i, '')}` : 'Call done. Follow up as agreed.', tone: 'idle' };
   if (lead.stage === 'active') {
     if (noPhone) return { text: 'Ask for a phone number and agree a call time.', tone: 'soon' };
     return { text: lead.callback_text ? `Confirm a call time. They said "${lead.callback_text}".` : 'Agree a time for the designer call.', tone: 'soon' };

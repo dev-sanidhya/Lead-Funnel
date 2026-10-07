@@ -45,7 +45,8 @@ class Engine extends EventEmitter {
   }
 
   // ---------- helpers ----------
-  transportFor(lead) { return this.transports[lead.channel === 'sim' ? 'sim' : lead.channel] || this.transports.sim; }
+  // Sample leads (meta.demo, see scripts/seed-demo.js) never message a real account: they use the no-op transport.
+  transportFor(lead) { if (lead.meta && lead.meta.demo) return this.transports.sim; return this.transports[lead.channel === 'sim' ? 'sim' : lead.channel] || this.transports.sim; }
 
   runExclusive(leadId, fn) {
     const prev = this.locks.get(leadId) || Promise.resolve();

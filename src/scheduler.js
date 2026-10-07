@@ -34,6 +34,7 @@ class Scheduler {
       // when it cannot (messaging window closed), the owner is told to do it by hand.
       for (const l of this.store.listLeads({ limit: 2000 })) {
         if (l.channel === 'sim' && !includeSim) continue;
+        if (l.meta.demo && !force) continue; // sample leads only move when the owner presses 'Run follow-ups now'
         const fu = l.meta.fu || {};
         if (!l.callback_at || l.callback_status !== 'scheduled' || fu.done_at || fu.reminded_at || fu.manual_needed_at) continue;
         if (l.opted_out || l.stage === 'disqualified') continue;
@@ -50,6 +51,7 @@ class Scheduler {
         const leads = this.store.listLeads({ limit: 2000 });
         for (const l of leads) {
           if (l.channel === 'sim' && !includeSim) continue;
+          if (l.meta.demo && !force) continue;
           if (!l.chat_id || l.ai_paused || l.opted_out || l.stage_locked || !l.last_outbound_at) continue;
           const awaiting = (l.last_inbound_at || 0) < l.last_outbound_at;
           // Instagram only lets the AI message within 24h of the customer's last message.

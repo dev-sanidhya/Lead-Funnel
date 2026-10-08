@@ -109,12 +109,12 @@
 <div class="shell">
   <section class="hero">
     <div class="logo"><div class="mark" id="mark">A</div><span id="biz">Our studio</span></div>
-    <h1>Let's design a space you'll love.</h1>
+    <h1>Let's plan a campaign people talk about.</h1>
     <p class="lead" id="tagline">Tell us about your project in two minutes and we'll take it from there.</p>
     <ul class="points">
       <li><span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><b>Quick and simple</b><span class="s">Three short steps, no long forms.</span></div></li>
       <li><span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.2A8 8 0 1 1 21 12z"/></svg></span><div><b>A real conversation</b><span class="s" id="chanLine">We continue in a direct message, so you can ask us anything.</span></div></li>
-      <li><span class="ico"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><div><b>A designer for your project</b><span class="s">We match you with the right person and agree a time to talk.</span></div></li>
+      <li><span class="ico"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><div><b>A brand lead for your campaign</b><span class="s">We match you with the right person and agree a time to talk.</span></div></li>
     </ul>
     <div class="fine" id="areas"></div>
   </section>
@@ -135,19 +135,19 @@
           </div>
 
           <div data-step="2" class="hidden">
-            <h2>Tell us about your space</h2><p class="sub">Pick everything that applies. A rough idea is plenty.</p>
+            <h2>Tell us about your brand</h2><p class="sub">Pick everything that applies. A rough idea is plenty.</p>
             <div class="grid">
-              <div class="full"><label class="t">What would you like designed?</label><div class="chips" id="scope"></div></div>
-              <div class="full"><label class="t">What kind of property is it?</label><div class="chips" id="ptypes" data-single></div></div>
-              <div><label class="t" for="size">Size</label><select id="size"><option value="">Select</option></select></div>
-              <div><label class="t" for="sqft">Area in sq ft <span class="opt">(optional)</span></label><input id="sqft" type="text" inputmode="numeric" placeholder="e.g. 1450"></div>
+              <div class="full"><label class="t">What do you need help with?</label><div class="chips" id="scope"></div></div>
+              <div class="full"><label class="t">What kind of brand is it?</label><div class="chips" id="ptypes" data-single></div></div>
+              <div><label class="t" for="size">Brand stage</label><select id="size"><option value="">Select</option></select></div>
+              <div style="display:none"><label class="t" for="sqft">Area in sq ft <span class="opt">(optional)</span></label><input id="sqft" type="text" inputmode="numeric" placeholder="e.g. 1450"></div>
               <div><label class="t" for="city">City</label><input id="city" type="text" autocomplete="address-level2" placeholder="e.g. Pune"></div>
-              <div><label class="t" for="locality">Area or locality <span class="opt">(optional)</span></label><input id="locality" type="text" placeholder="e.g. Kharadi"></div>
+              <div><label class="t" for="locality">City area or locality <span class="opt">(optional)</span></label><input id="locality" type="text" placeholder="e.g. Kharadi"></div>
             </div>
           </div>
 
           <div data-step="3" class="hidden">
-            <h2>Budget and timing</h2><p class="sub">This helps us match you with the right designer. An estimate is perfectly fine.</p>
+            <h2>Budget and timing</h2><p class="sub">This helps us match you with the right brand lead. An estimate is perfectly fine.</p>
             <div class="grid">
               <div class="full"><label class="t">Roughly what budget do you have in mind?</label><div class="cards" id="budgets"></div></div>
               <div class="full"><label class="t">When would you like to get started?</label><div class="chips" id="timelines" data-single></div></div>
@@ -185,7 +185,7 @@ const params = new URLSearchParams(location.search);
 const sel = { contact_pref: '', scope: new Set(), property_type: '', budget: '', timeline: '' };
 let step = 1;
 const TOTAL = 3;
-const LABELS = ['About you', 'Your space', 'Budget and timing'];
+const LABELS = ['About you', 'Your brand', 'Budget and timing'];
 
 function chipGroup(id, items, key, multi) {
   const el = $('#' + id);
@@ -231,7 +231,7 @@ function validate() {
     const em = $('#email').value.trim(); if (em && !/.+@.+\..+/.test(em)) return fail('email', 'That email does not look right.');
   }
   if (step === 2) {
-    if (!sel.scope.size) { $('#err').textContent = 'Please pick at least one thing you would like designed.'; return false; }
+    if (!sel.scope.size) { $('#err').textContent = 'Please pick at least one thing you need help with.'; return false; }
     if (!$('#city').value.trim()) return fail('city', 'Please tell us which city the project is in.');
   }
   if (step === 3) {
@@ -245,11 +245,11 @@ function buildMessage(b) {
   const list = (arr) => (arr.length <= 1 ? arr.join('') : arr.slice(0, -1).join(', ') + (arr.some((x) => / and /.test(x)) ? ', plus ' : ' and ') + arr[arr.length - 1]);
   const scope = list((b.scope || []).map((x) => x.toLowerCase()));
   const sizeOk = b.size && b.size !== 'Not applicable';
-  const home = [sizeOk ? b.size.replace(' BHK', 'BHK') : '', b.property_type ? b.property_type.toLowerCase() : ''].filter(Boolean).join(' ');
+  const home = b.property_type ? b.property_type.toLowerCase() : '';
   const where = [b.locality, b.city].filter((x) => x && x.trim()).join(', ');
   const parts = [];
   parts.push(`Hi! I'm ${first}.`);
-  parts.push(`I'd like help with ${scope || 'my project'}${home ? ` for my ${home}` : ''}${where ? ` in ${where}` : ''}.`);
+  parts.push(`I'd like help with ${scope || 'my campaign'}${home ? ` for my ${home} brand` : ''}${where ? ` in ${where}` : ''}.`);
   if (b.budget && b.budget !== 'Not sure yet') parts.push(`My budget is around ${b.budget}.`);
   if (b.timeline) parts.push(b.timeline === 'Just exploring' ? "I'm just exploring for now." : b.timeline === 'As soon as possible' ? "I'd like to get started as soon as possible." : `I'd like to get started ${b.timeline.charAt(0).toLowerCase() + b.timeline.slice(1)}.`);
   if (b.contact_pref && b.contact_pref !== 'Any time') parts.push(`${b.contact_pref} is the best time to reach me.`);

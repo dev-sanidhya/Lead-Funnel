@@ -6,19 +6,18 @@
 const { formatMoney } = require('./budget');
 
 const SCOPE_OPTIONS = [
-  { label: 'Full home interiors', category: 'Full home' },
-  { label: 'Modular kitchen', category: 'Modular kitchen' },
-  { label: 'Wardrobes and storage', category: 'Modular kitchen' },
-  { label: 'Living room', category: 'Full home' },
-  { label: 'Bedrooms', category: 'Full home' },
-  { label: 'Bathrooms', category: 'Renovation' },
-  { label: 'Office or commercial', category: 'Office' },
-  { label: 'Renovation', category: 'Renovation' },
+  { label: 'Influencer marketing', category: 'Influencer marketing' },
+  { label: 'Creator seeding and gifting', category: 'Influencer marketing' },
+  { label: 'Celebrity gifting', category: 'Celebrity gifting' },
+  { label: 'Brand launch', category: 'Brand launch' },
+  { label: 'Launch events', category: 'Brand launch' },
+  { label: 'PR and media coverage', category: 'PR and media' },
+  { label: 'Social media and UGC', category: 'Social media' },
   { label: 'Something else', category: 'Other' },
 ];
 
-const PROPERTY_TYPES = ['Apartment', 'Villa', 'Independent house', 'Office', 'Shop or showroom', 'Other'];
-const SIZES = ['1 BHK', '2 BHK', '3 BHK', '4 BHK', '5 BHK or larger', 'Not applicable'];
+const PROPERTY_TYPES = ['D2C brand', 'Fashion or apparel', 'Beauty or wellness', 'Food and beverage', 'Tech or app', 'Other'];
+const SIZES = ['Just launching', 'Under 1 year old', '1 to 3 years', '3 to 10 years', '10+ years', 'Not applicable'];
 const CONTACT_TIMES = ['Morning', 'Afternoon', 'Evening', 'Any time'];
 
 const TIMELINE_OPTIONS = [
@@ -45,7 +44,7 @@ function mapIntake(body, settings) {
   const scopeLabels = (Array.isArray(body.scope) ? body.scope : String(body.scope || '').split('|')).map((x) => clean(x, 60)).filter(Boolean).slice(0, 9);
   const cats = scopeLabels.map((l) => (SCOPE_OPTIONS.find((o) => o.label === l) || {}).category).filter(Boolean);
   const fallbackType = clean(body.project_type, 60);
-  const pick = ['Full home', 'Modular kitchen', 'Office', 'Renovation'].find((c) => cats.includes(c)) || cats[0] || fallbackType || null;
+  const pick = cats[0] || fallbackType || null;
   const project_type = pick && (q.project_types.includes(pick) ? pick : q.project_types.includes('Other') ? 'Other' : pick);
 
   const ptype = clean(body.property_type, 40);

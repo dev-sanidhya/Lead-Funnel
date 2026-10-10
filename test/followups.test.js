@@ -30,7 +30,7 @@ function fakeLlm() {
     }
     const confirm = sys.match(/time back exactly as written: (.+?)\. The person/);
     if (confirm) return `Perfect, we will call you ${confirm[1]}. What is the best number to reach you on?`;
-    const rem = sys.match(/will call them at (.+?)\. Invite/);
+    const rem = sys.match(/will call them at (.+?)\. That is the one/);
     if (rem) return `Quick reminder: your designer call is at ${rem[1]}. Reply here if the time needs to change.`;
     const first = sys.match(/FIRST message to (\S+)/);
     if (first) return `Hi ${first[1]}, thanks for your enquiry. What kind of space are you planning?`;

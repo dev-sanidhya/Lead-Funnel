@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { parseWhen, formatWhen, zonedEpoch, isoLocalToEpoch, partsIn } = require('../src/when');
+const { parseWhen, formatWhen, zonedEpoch, isoLocalToEpoch, partsIn } = require('../core/when');
 
 const TZ = 'Asia/Kolkata';
 // Friday 2 Oct 2026, 14:30 in India

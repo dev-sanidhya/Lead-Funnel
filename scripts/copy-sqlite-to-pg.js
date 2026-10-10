@@ -2,8 +2,8 @@
 // One-off: copies settings, kv (Instagram token), designers, and optionally the leads, from the local
 // SQLite file into Postgres.   DATABASE_URL=... node scripts/copy-sqlite-to-pg.js [--with-leads]
 const { DatabaseSync } = require('node:sqlite');
-const config = require('../src/config');
-const { Store } = require('../src/db');
+const config = require('../core/config');
+const { Store } = require('../core/db');
 
 (async () => {
   if (!config.databaseUrl) { console.error('Set DATABASE_URL first.'); process.exit(1); }

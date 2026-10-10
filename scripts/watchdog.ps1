@@ -24,7 +24,7 @@ while ((Get-Date) -lt $end) {
       Log 'server down, restarting'
       Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'src[\\/]index\.js' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
       Start-Sleep -Seconds 1
-      Start-Process -FilePath $node -ArgumentList 'src/index.js' -WorkingDirectory $wd -WindowStyle Hidden -RedirectStandardOutput (Join-Path $wd 'server.log') -RedirectStandardError (Join-Path $wd 'server.err.log')
+      Start-Process -FilePath $node -ArgumentList 'core/index.js' -WorkingDirectory $wd -WindowStyle Hidden -RedirectStandardOutput (Join-Path $wd 'server.log') -RedirectStandardError (Join-Path $wd 'server.err.log')
       Start-Sleep -Seconds 5
       $downCount = 0
     }

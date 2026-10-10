@@ -1,10 +1,10 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { mapIntake, budgetOptions, TIMELINE_OPTIONS } = require('../src/formoptions');
-const { nextStepFor, briefFor } = require('../src/attention');
-const { DEFAULTS, merge, sanitize } = require('../src/settings');
-const { evaluate } = require('../src/qualify');
+const { mapIntake, budgetOptions, TIMELINE_OPTIONS } = require('../core/formoptions');
+const { nextStepFor, briefFor } = require('../core/attention');
+const { DEFAULTS, merge, sanitize } = require('../core/settings');
+const { evaluate } = require('../core/qualify');
 
 const S = () => sanitize(merge(DEFAULTS, {}));
 const NOW = Date.now();

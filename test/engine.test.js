@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { Store } = require('../src/db');
-const { createApp } = require('../src/app');
-const config = require('../src/config');
+const { Store } = require('../core/db');
+const { createApp } = require('../core/app');
+const config = require('../core/config');
 
 const silent = { log() {}, warn() {}, error() {} };
 
@@ -211,7 +211,7 @@ test('telegram layer: /start token and gform phone matching', async () => {
     calls.push({ method, body: JSON.parse(init.body) });
     return { ok: true, json: async () => ({ ok: true, result: { message_id: 1 } }) };
   };
-  const { Telegram } = require('../src/telegram');
+  const { Telegram } = require('../core/telegram');
   const tg = new Telegram({ token: 'x', engine: app.engine, store: app.store, settings: app.settings, config, log: silent, fetchImpl });
   app.engine.transports.telegram = tg.transport;
 

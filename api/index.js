@@ -4,9 +4,9 @@
 // response is sent (replying to a DM, for example) is handed to waitUntil so Vercel keeps
 // the function alive until it finishes.
 const { waitUntil } = require('@vercel/functions');
-const config = require('../src/config');
-const { createApp } = require('../src/app');
-const { createHandler } = require('../src/server');
+const config = require('../core/config');
+const { createApp } = require('../core/app');
+const { createHandler } = require('../core/server');
 
 let booting = null;
 function boot() {

@@ -1,10 +1,10 @@
 'use strict';
 // CLI: run the persona simulator against the live LLM using a throwaway DB.
 //   node scripts/simulate.js [personaId ...] [--show] [--min=500000]
-const config = require('../src/config');
-const { Store } = require('../src/db');
-const { createApp } = require('../src/app');
-const { formatMoney } = require('../src/budget');
+const config = require('../core/config');
+const { Store } = require('../core/db');
+const { createApp } = require('../core/app');
+const { formatMoney } = require('../core/budget');
 
 const args = process.argv.slice(2);
 const show = args.includes('--show');

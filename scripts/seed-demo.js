@@ -5,10 +5,10 @@
 // Settings, designers and channel tokens are kept. Sample leads carry meta.demo, so they never
 // message a real account and the background timers leave them alone until you press
 // "Run follow-ups now".
-const config = require('../src/config');
-const { Store } = require('../src/db');
-const { Settings } = require('../src/settings');
-const { evaluate, pickDesigner } = require('../src/qualify');
+const config = require('../core/config');
+const { Store } = require('../core/db');
+const { Settings } = require('../core/settings');
+const { evaluate, pickDesigner } = require('../core/qualify');
 
 if (!process.argv.includes('--wipe')) {
   console.log('This deletes ALL leads, messages and activity. Re-run with --wipe to confirm.');

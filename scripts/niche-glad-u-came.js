@@ -1,9 +1,9 @@
 'use strict';
 // Configures the whole system for Glad U Came (PR and influencer marketing): business facts, assistant
 // voice and rules, qualification, team and form choices.   node scripts/niche-glad-u-came.js
-const config = require('../src/config');
-const { Store } = require('../src/db');
-const { Settings } = require('../src/settings');
+const config = require('../core/config');
+const { Store } = require('../core/db');
+const { Settings } = require('../core/settings');
 (async () => {
 const store = await Store.open({ url: config.databaseUrl, file: config.dbPath });
 const settings = new Settings(store);

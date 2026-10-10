@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { quickFacts } = require('../src/quickfacts');
-const { DEFAULTS, merge, sanitize } = require('../src/settings');
+const { quickFacts } = require('../core/quickfacts');
+const { DEFAULTS, merge, sanitize } = require('../core/settings');
 
 const S = sanitize(merge(DEFAULTS, {}));
 

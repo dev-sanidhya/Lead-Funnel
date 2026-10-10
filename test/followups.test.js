@@ -1,11 +1,11 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { Store } = require('../src/db');
-const { createApp } = require('../src/app');
-const config = require('../src/config');
-const { parseWhen, formatWhen, partsIn } = require('../src/when');
-const { attentionFor, briefFor, windowOpen } = require('../src/attention');
+const { Store } = require('../core/db');
+const { createApp } = require('../core/app');
+const config = require('../core/config');
+const { parseWhen, formatWhen, partsIn } = require('../core/when');
+const { attentionFor, briefFor, windowOpen } = require('../core/attention');
 
 const silent = { log() {}, warn() {}, error() {} };
 const TZ = 'Asia/Kolkata';

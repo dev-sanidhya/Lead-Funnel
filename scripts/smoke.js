@@ -3,7 +3,7 @@
 //   node scripts/smoke.js            (uses PUBLIC_URL from .env)
 //   node scripts/smoke.js http://localhost:3000
 // Creates a few temporary leads and deletes them at the end.
-const config = require('../src/config');
+const config = require('../core/config');
 
 const BASE = (process.argv[2] || config.publicUrl).replace(/\/$/, '');
 const H = { 'ngrok-skip-browser-warning': '1' };

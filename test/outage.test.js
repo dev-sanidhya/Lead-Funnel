@@ -1,11 +1,11 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { Store } = require('../src/db');
-const { createApp } = require('../src/app');
-const { Llm } = require('../src/llm');
-const { attentionFor } = require('../src/attention');
-const config = require('../src/config');
+const { Store } = require('../core/db');
+const { createApp } = require('../core/app');
+const { Llm } = require('../core/llm');
+const { attentionFor } = require('../core/attention');
+const config = require('../core/config');
 
 const silent = { log() {}, warn() {}, error() {} };
 const settle = async (app, id) => { await app.engine.idle(id); await new Promise((r) => setTimeout(r, 25)); await app.engine.idle(id); };

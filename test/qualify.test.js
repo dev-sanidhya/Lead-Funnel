@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { evaluate, pickDesigner } = require('../src/qualify');
-const { parseAmount, formatMoney } = require('../src/budget');
-const { DEFAULTS, merge, sanitize } = require('../src/settings');
+const { evaluate, pickDesigner } = require('../core/qualify');
+const { parseAmount, formatMoney } = require('../core/budget');
+const { DEFAULTS, merge, sanitize } = require('../core/settings');
 
 const S = () => sanitize(merge(DEFAULTS, {}));
 const lead = (o = {}) => ({ meta: {}, stage: 'qualifying', ...o });
@@ -22,7 +22,7 @@ test('parseAmount handles lakh, crore, k, ranges and commas', async () => {
 });
 
 test('times, sizes and durations are never mistaken for money', async () => {
-  const { amountSupportedByText, isBareNumberAnswer } = require('../src/budget');
+  const { amountSupportedByText, isBareNumberAnswer } = require('../core/budget');
   assert.strictEqual(parseAmount('how about next Wednesday at 10 am?', { allowBare: true }), null);
   assert.strictEqual(parseAmount('3 bhk, start in 2 months', { allowBare: true }), null);
   assert.strictEqual(isBareNumberAnswer('next Wednesday at 10 am'), false);
@@ -36,7 +36,7 @@ test('times, sizes and durations are never mistaken for money', async () => {
 });
 
 test('applyFacts rejects hallucinated budgets and keeps explicit ones', async () => {
-  const { applyFacts } = require('../src/facts');
+  const { applyFacts } = require('../core/facts');
   const s = S();
   const base = { meta: {}, stage: 'qualifying' };
   const bogus = applyFacts(base, { budget_amount: 1000000 }, 'Lets schedule it, Wednesday at 10 am works', { lastAsked: 'budget', settings: s });

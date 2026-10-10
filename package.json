@@ -5,8 +5,8 @@
   "description": "AI lead qualification funnel: Instagram and Telegram agent, lead CRM, admin console. Runs on Vercel with Postgres.",
   "engines": { "node": ">=22.13" },
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
+    "start": "node core/index.js",
+    "dev": "node --watch core/index.js",
     "test": "node --test \"test/*.test.js\"",
     "simulate": "node scripts/simulate.js",
     "migrate": "node scripts/migrate-pg.js"

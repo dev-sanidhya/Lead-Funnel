@@ -1,7 +1,7 @@
 'use strict';
 // Creates or upgrades the Postgres schema.   DATABASE_URL=... npm run migrate
-const config = require('../src/config');
-const { Store } = require('../src/db');
+const config = require('../core/config');
+const { Store } = require('../core/db');
 
 (async () => {
   if (!config.databaseUrl) { console.error('Set DATABASE_URL first.'); process.exit(1); }

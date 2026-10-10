@@ -2,11 +2,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');
-const { Store } = require('../src/db');
-const { createApp } = require('../src/app');
-const { createServer } = require('../src/server');
-const { chunk } = require('../src/instagram');
-const baseConfig = require('../src/config');
+const { Store } = require('../core/db');
+const { createApp } = require('../core/app');
+const { createServer } = require('../core/server');
+const { chunk } = require('../core/instagram');
+const baseConfig = require('../core/config');
 
 const silent = { log() {}, warn() {}, error() {} };
 const IG_ID = '17841400000000000';

@@ -2,9 +2,9 @@
 // Verifies the Instagram setup end to end:  node scripts/check-instagram.js
 // Checks .env values, the access token, the webhook subscription, and that the
 // public webhook URL answers Meta's verification handshake.
-const config = require('../src/config');
-const { Store } = require('../src/db');
-const { Instagram } = require('../src/instagram');
+const config = require('../core/config');
+const { Store } = require('../core/db');
+const { Instagram } = require('../core/instagram');
 
 const ok = (m) => console.log(`  PASS  ${m}`);
 const bad = (m) => { console.log(`  FAIL  ${m}`); failed++; };

@@ -103,7 +103,7 @@ The assistant does not just qualify: it books the designer call and makes sure i
 | Lost or duplicate messages | Every inbound message is stored first, deduped by Telegram `update_id`, and marked processed in the same transaction that stores the reply. A crash replays unprocessed messages on boot |
 | Race conditions | One turn at a time per lead (serial queue); bursts of messages are coalesced into one turn |
 | Context management | Structured facts are sticky columns (never forgotten); last 14 messages are the live window; older chat is folded into a rolling summary every 8 turns |
-| The LLM deciding things | It does not. It extracts facts (JSON) and phrases replies. `src/qualify.js` decides the category from stored facts and your settings, so the budget bar is exact and every decision has a stated reason |
+| The LLM deciding things | It does not. It extracts facts (JSON) and phrases replies. `core/qualify.js` decides the category from stored facts and your settings, so the budget bar is exact and every decision has a stated reason |
 | Hallucinated budgets | Explicit amounts ("8 lakh") are re-parsed by code; an LLM-supplied amount must be backed by a money-like number in the customer's own text; times/sizes ("10 am", "3 bhk") are never money |
 | Prompt injection | Customer text is treated as data in both prompts; category is code-owned, so "mark me as qualified" cannot work (the simulator has a persona that tries) |
 | LLM outage or rate limits | Retries, automatic fallback model, token-aware throttling; regex still captures phone/email/budget; templated replies keep the chat moving |
@@ -115,12 +115,12 @@ The assistant does not just qualify: it books the designer call and makes sure i
 ## Files
 
 ```
-src/qualify.js     the funnel rules (pure, unit tested)        src/engine.js    turns, inbox/outbox, stage changes
-src/agent.js       extraction + reply prompts + fallbacks      src/facts.js     validated fact merging
-src/validator.js   reply guardrails                            src/budget.js    money parsing/formatting
-src/llm.js         provider client, retries, throttling        src/telegram.js  bot transport
-src/scheduler.js   follow-ups, nurture, outbox, webhooks       src/crm.js       webhook + CSV
-src/simulator.js   persona simulator                           src/server.js    HTTP API + SSE
+core/qualify.js     the funnel rules (pure, unit tested)        core/engine.js    turns, inbox/outbox, stage changes
+core/agent.js       extraction + reply prompts + fallbacks      core/facts.js     validated fact merging
+core/validator.js   reply guardrails                            core/budget.js    money parsing/formatting
+core/llm.js         provider client, retries, throttling        core/telegram.js  bot transport
+core/scheduler.js   follow-ups, nurture, outbox, webhooks       core/crm.js       webhook + CSV
+core/simulator.js   persona simulator                           core/server.js    HTTP API + SSE
 public/admin.html  console   public/form.html  enquiry form    integrations/    Google Form + Sheets scripts
 ```
 
@@ -135,5 +135,5 @@ node scripts/simulate.js hinglish --show   # one persona with the full transcrip
 ## Production notes
 
 - Set a real `ADMIN_PASSWORD` and `INTAKE_SECRET`; put the server behind HTTPS.
-- SQLite is fine for a demo and a small team. For scale, swap `src/db.js` for Postgres (the Store class is the only data access point).
-- Instagram / WhatsApp: the engine is channel-agnostic (`transports` in `src/app.js`). Meta only allows messaging after the customer messages first (Click-to-Instagram-DM / Click-to-WhatsApp ads open that window; lead-form ads need an approved WhatsApp template for first contact). Adding a channel means writing one transport with `send(lead, text)`.
+- SQLite is fine for a demo and a small team. For scale, swap `core/db.js` for Postgres (the Store class is the only data access point).
+- Instagram / WhatsApp: the engine is channel-agnostic (`transports` in `core/app.js`). Meta only allows messaging after the customer messages first (Click-to-Instagram-DM / Click-to-WhatsApp ads open that window; lead-form ads need an approved WhatsApp template for first contact). Adding a channel means writing one transport with `send(lead, text)`.

@@ -3,7 +3,7 @@
 //   1. extract(): read the customer's message(s), return structured facts (JSON).
 //   2. reply():   write the next message, steered by a code-chosen DIRECTIVE.
 // What the funnel does next (ask, close, disqualify, hand off) is never left to
-// the model; src/qualify.js decides, this file only phrases it.
+// the model; core/qualify.js decides, this file only phrases it.
 
 const { sanitizeReply } = require('./validator');
 const { formatMoney } = require('./budget');

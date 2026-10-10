@@ -1,12 +1,12 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { plan, streak, inQuiet, adjustForHours } = require('../src/followups');
-const { DEFAULTS } = require('../src/settings');
-const { Store } = require('../src/db');
-const { createApp } = require('../src/app');
-const { Scheduler } = require('../src/scheduler');
-const config = require('../src/config');
+const { plan, streak, inQuiet, adjustForHours } = require('../core/followups');
+const { DEFAULTS } = require('../core/settings');
+const { Store } = require('../core/db');
+const { createApp } = require('../core/app');
+const { Scheduler } = require('../core/scheduler');
+const config = require('../core/config');
 
 const MIN = 60000;
 const HOUR = 3600000;

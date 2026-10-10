@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { applyFacts } = require('../src/facts');
-const { DEFAULTS, merge, sanitize } = require('../src/settings');
+const { applyFacts } = require('../core/facts');
+const { DEFAULTS, merge, sanitize } = require('../core/settings');
 
 const settings = sanitize(merge(DEFAULTS, {}));
 const run = (f, text) => applyFacts({ meta: {}, stage: 'qualifying' }, f, text, { lastAsked: null, settings });

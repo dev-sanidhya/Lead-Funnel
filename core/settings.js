@@ -33,14 +33,14 @@ const DEFAULTS = {
   },
   followups: {
     enabled: true,
-    first_after_min: 45,
+    first_after_min: 480,
     second_after_min: 720,
     max: 2,
     last_call_margin_min: 180,
     stall_after_min: 720,
     chat_nudge_after_min: 30,
-    quiet_start_hour: 21,
-    quiet_end_hour: 9,
+    quiet_start_hour: 0,
+    quiet_end_hour: 0,
     nurture_every_days: 7,
     nurture_max: 3,
     reminder_before_min: 60,
@@ -49,6 +49,17 @@ const DEFAULTS = {
   channels: {
     primary: 'auto',
     ice_breakers: ['Get a free design quote', 'Check if my project fits', 'Talk about my budget'],
+  },
+  calendar: {
+    enabled: false,
+    calendar_id: '',
+    work_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    work_start_hour: 10,
+    work_end_hour: 19,
+    slot_minutes: 30,
+    buffer_min: 15,
+    min_notice_min: 120,
+    max_days_ahead: 14,
   },
   handoff: {
     notify_chat_id: '',
@@ -92,6 +103,17 @@ function sanitize(s) {
   f.quiet_start_hour = Math.min(24, Math.max(0, Math.round(Number(f.quiet_start_hour)) || 0));
   f.quiet_end_hour = Math.min(24, Math.max(0, Math.round(Number(f.quiet_end_hour)) || 0));
   try { new Intl.DateTimeFormat('en-US', { timeZone: s.business.timezone }); } catch { s.business.timezone = 'Asia/Kolkata'; }
+  const c = s.calendar;
+  c.enabled = !!c.enabled;
+  c.calendar_id = String(c.calendar_id || '').trim();
+  c.work_days = listish(c.work_days).map((d) => d.slice(0, 3)).filter((d) => ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].includes(d.toLowerCase()));
+  if (!c.work_days.length) c.work_days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  c.work_start_hour = Math.min(23, Math.max(0, Math.round(Number(c.work_start_hour)) || 10));
+  c.work_end_hour = Math.min(24, Math.max(c.work_start_hour + 1, Math.round(Number(c.work_end_hour)) || 19));
+  c.slot_minutes = Math.min(180, Math.max(15, Math.round(Number(c.slot_minutes)) || 30));
+  c.buffer_min = Math.min(120, Math.max(0, Math.round(Number(c.buffer_min)) || 0));
+  c.min_notice_min = Math.min(10080, Math.max(0, Math.round(Number(c.min_notice_min)) || 0));
+  c.max_days_ahead = Math.min(60, Math.max(1, Math.round(Number(c.max_days_ahead)) || 14));
   s.agent.reveal_minimum = !!s.agent.reveal_minimum;
   s.channels.primary = ['auto', 'instagram', 'telegram'].includes(s.channels.primary) ? s.channels.primary : 'auto';
   s.channels.ice_breakers = listish(s.channels.ice_breakers).slice(0, 4);

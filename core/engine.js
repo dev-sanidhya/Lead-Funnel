@@ -24,6 +24,7 @@ const { formatMoney } = require('./budget');
 const { formatWhen } = require('./when');
 const { briefFor } = require('./attention');
 const { streak } = require('./followups');
+const { toLocalIso, pickOrdinal } = require('./calendar');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const FINAL = new Set(['active', 'nurture', 'disqualified']);
@@ -46,6 +47,8 @@ class Engine extends EventEmitter {
     this.locks = new Map();
     this.delivering = new Set();
     this.summarizing = new Set();
+    this.calSyncing = new Set();
+    this.calendar = null; // set by createApp
     this.pending = new Set();
     this.defer = null; // set by the serverless entry: keeps the function alive until background work ends
     this.stats = { turns: 0, llmFallbacks: 0, sendFailures: 0 };
@@ -278,7 +281,14 @@ class Engine extends EventEmitter {
         await this.store.addEvent(lead.id, 'llm_error', { step: 'extract', error: String(e.message).slice(0, 200) });
         facts = quickFacts(text, lastAsked, settings); // no AI: still read the common answers by rule
       }
-      const applied = applyFacts(lead, facts || {}, text, { lastAsked, settings, now: Date.now() });
+      facts = facts || {};
+      // "the second one": the customer picked one of the call times we offered
+      const offered = lead.meta.offered || [];
+      if (offered.length && lastAsked === 'callback') {
+        const i = pickOrdinal(text, offered.length);
+        if (i >= 0) { facts.callback_at = toLocalIso(offered[i], settings.business.timezone); facts.callback_text = formatWhen(offered[i], settings.business.timezone); }
+      }
+      const applied = applyFacts(lead, facts, text, { lastAsked, settings, now: Date.now() });
       applied.meta.turns = (lead.meta.turns || 0) + 1;
       const prevStage = lead.stage;
       lead = await this.store.updateLead(leadId, { ...applied.patch, meta: applied.meta });
@@ -289,6 +299,7 @@ class Engine extends EventEmitter {
       const firstContact = !history.some((m) => m.direction === 'out');
       const decision = this.decide(lead, settings, { changed: applied.changed, greeting: firstContact });
       lead = decision.lead;
+      lead = await this.calendarStep(lead, decision, applied, settings);
 
       // 3. Compose.
       const info = {};
@@ -382,6 +393,8 @@ class Engine extends EventEmitter {
     if (directive && directive.type === 'ASK') {
       meta.last_asked = directive.field;
       meta.asked = { ...meta.asked, [directive.field]: (meta.asked[directive.field] || 0) + 1 };
+    } else if (directive && directive.type === 'OFFER_SLOTS') {
+      meta.last_asked = 'callback'; // negotiating a time does not count against the limit on asking
     } else if (directive && directive.type === 'GREET') {
       meta.last_asked = directive.field;
       meta.asked = { ...meta.asked, [directive.field]: (meta.asked[directive.field] || 0) + 1 };
@@ -461,7 +474,87 @@ class Engine extends EventEmitter {
       await this.store.enqueueWebhook(created ? 'lead.created' : stageChanged ? 'lead.stage_changed' : 'lead.updated', await this.publicLead(lead, { prevStage }));
     }
     if (stageChanged && h.alert_stages.includes(lead.stage)) this.bg(this.alertTeam(lead));
+    if (this.calendar && this.calendar.ready) this.bg(this.syncCalendar(lead.id));
     this.changed('lead', lead.id);
+  }
+
+  // ---------- calendar ----------
+  fmtSlots(slots) { const tz = this.settings.get().business.timezone; return slots.map((t) => formatWhen(t, tz)); }
+
+  // Runs inside a turn, before the reply is written: a time the customer proposed is checked against the
+  // owner's real calendar. Free: it is booked and confirmed. Busy: the callback is withdrawn and the
+  // nearest free options are offered. Never throws: a calendar outage must not break the chat.
+  async calendarStep(lead, decision, applied, settings) {
+    const cal = this.calendar;
+    if (!cal || !cal.ready || (lead.meta && lead.meta.demo) || lead.channel === 'sim') return lead;
+    try {
+      if (applied.changed.includes('callback_at') && lead.callback_at && decision.stage === 'active') {
+        const r = await cal.check(lead.callback_at);
+        if (r.ok) {
+          const booked = await this.bookEvent(lead, settings);
+          const meta = { ...lead.meta, cal: booked };
+          delete meta.offered;
+          lead = await this.store.updateLead(lead.id, { meta });
+          await this.store.addEvent(lead.id, 'calendar_booked', { start: booked.start, link: booked.link });
+        } else {
+          const meta = { ...lead.meta, offered: r.slots };
+          const asked = formatWhen(lead.callback_at, settings.business.timezone);
+          lead = await this.store.updateLead(lead.id, { callback_at: null, callback_status: 'requested', callback_text: asked, meta });
+          decision.directive = { type: 'OFFER_SLOTS', requested: asked, slots: this.fmtSlots(r.slots) };
+          await this.store.addEvent(lead.id, 'calendar_slot_busy', { requested: asked, offered: r.slots });
+        }
+      } else if (decision.directive && ((decision.directive.type === 'CLOSE_ACTIVE' && !lead.callback_at) || (decision.directive.type === 'POST' && decision.directive.askCallback))) {
+        const slots = await cal.offer();
+        if (slots.length) {
+          decision.directive.slots = this.fmtSlots(slots);
+          lead = await this.store.updateLead(lead.id, { meta: { ...lead.meta, offered: slots } });
+        }
+      }
+    } catch (e) {
+      await this.store.addEvent(lead.id, 'calendar_error', { error: String(e.message).slice(0, 200) });
+      this.log.warn('[calendar]', e.message);
+    }
+    return lead;
+  }
+
+  async bookEvent(lead, settings) {
+    const brief = briefFor(lead, settings);
+    const url = `${this.config.publicUrl}/admin#lead=${lead.id}`;
+    const existing = lead.meta && lead.meta.cal;
+    if (existing && existing.event_id) {
+      try { return await this.calendar.move(lead, existing.event_id, brief, url); } catch (e) { /* the old event was deleted by hand: make a new one */ }
+    }
+    return this.calendar.book(lead, brief, url);
+  }
+
+  // Keeps the calendar in step with the lead whenever something changes it (the owner rescheduling,
+  // a stage change, a call cancelled). Cheap when nothing needs doing: no calendar call is made.
+  async syncCalendar(leadId) {
+    const cal = this.calendar;
+    if (!cal || !cal.ready || this.calSyncing.has(leadId)) return;
+    this.calSyncing.add(leadId);
+    try {
+      const lead = await this.store.getLead(leadId);
+      if (!lead || lead.channel === 'sim' || (lead.meta && lead.meta.demo)) return;
+      const settings = this.settings.get();
+      const fu = lead.meta.fu || {};
+      const have = lead.meta.cal;
+      const wanted = lead.stage === 'active' && lead.callback_at && lead.callback_status === 'scheduled' && !fu.done_at && !lead.opted_out;
+      if (wanted && (!have || have.start !== lead.callback_at)) {
+        const booked = await this.bookEvent(lead, settings);
+        await this.store.updateLead(leadId, { meta: { ...lead.meta, cal: booked } });
+        await this.store.addEvent(leadId, 'calendar_booked', { start: booked.start, link: booked.link, by: 'sync' });
+        this.changed('lead', leadId);
+      } else if (have && (!lead.callback_at || lead.stage === 'disqualified' || lead.opted_out)) {
+        await cal.cancel(have.event_id);
+        const meta = { ...lead.meta }; delete meta.cal;
+        await this.store.updateLead(leadId, { meta });
+        await this.store.addEvent(leadId, 'calendar_cancelled', {});
+        this.changed('lead', leadId);
+      }
+    } catch (e) {
+      await this.store.addEvent(leadId, 'calendar_error', { error: String(e.message).slice(0, 200) }).catch(() => {});
+    } finally { this.calSyncing.delete(leadId); }
   }
 
   async publicLead(lead, extra = {}) {
@@ -577,6 +670,9 @@ class Engine extends EventEmitter {
           meta.fu_streak = { inbound_at: lead.last_inbound_at || 0, followups: st.followups + 1, drips: st.drips };
           const ev = evaluate(lead, settings, { hasInbound: this.hasInbound(lead) });
           directive = { type: 'FOLLOWUP', n: st.followups + 1, field: lead.stage === 'active' ? 'callback' : ev.nextField };
+          if (directive.field === 'callback' && this.calendar && this.calendar.ready && !(lead.meta && lead.meta.demo)) {
+            try { const slots = await this.calendar.offer(); if (slots.length) { directive.slots = this.fmtSlots(slots); meta.offered = slots; } } catch { /* nudge without options */ }
+          }
         } else {
           meta.drips_sent = (meta.drips_sent || 0) + 1;
           meta.fu_streak = { inbound_at: lead.last_inbound_at || 0, followups: st.followups, drips: st.drips + 1 };

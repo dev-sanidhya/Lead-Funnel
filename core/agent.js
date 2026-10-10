@@ -46,6 +46,9 @@ const ALT_ASK = {
   ],
 };
 
+// Offers real calendar times: exactly these, never invented ones.
+const slotAsk = (slots) => `offer exactly these call times and no others: ${slots.join('; ')}. Ask which one suits them best, and say they can suggest another time if none of these work.`;
+
 function renderFacts(lead, currency, tz = 'Asia/Kolkata') {
   const rows = [];
   if (lead.name) rows.push(`Name: ${lead.name}`);
@@ -96,7 +99,11 @@ function directiveBody(d, ctx) {
     case 'ANSWER':
       return 'They asked a question. Answer it briefly and helpfully using ONLY the business facts above. If you do not know, say a designer can confirm on a free consultation. Do not ask any question.';
     case 'CLOSE_ACTIVE':
-      return `They are a strong fit. Thank them warmly and show you understood their project in ONE natural sentence, without repeating their words back mechanically (for context: ${[lead.project_type, lead.city, lead.budget_amount != null ? `budget around ${money(lead.budget_amount)}` : '', lead.timeline_text || (lead.timeline_months != null ? `${lead.timeline_months} months` : '')].filter(Boolean).join(', ')}). ${designer ? `Tell them ${designer.name}${designer.title ? `, ${designer.title}` : ''}, from the team will reach out within one working day.` : 'Tell them a senior designer from the team will reach out within one working day.'} ${lead.callback_at ? `They already booked a call for ${formatWhen(lead.callback_at, settings.business.timezone)}, so confirm that time instead of asking for one.` : (lead.phone || lead.email) ? 'Then ask what day and time suit them for a quick call. Ask only that one question.' : 'Then ask, in ONE question, what day and time suit them for a quick call and the best phone number to reach them on.'}`;
+      return `They are a strong fit. Thank them warmly and show you understood their project in ONE natural sentence, without repeating their words back mechanically (for context: ${[lead.project_type, lead.city, lead.budget_amount != null ? `budget around ${money(lead.budget_amount)}` : '', lead.timeline_text || (lead.timeline_months != null ? `${lead.timeline_months} months` : '')].filter(Boolean).join(', ')}). ${designer ? `Tell them ${designer.name}${designer.title ? `, ${designer.title}` : ''}, from the team will reach out within one working day.` : 'Tell them a senior designer from the team will reach out within one working day.'} ${lead.callback_at ? `They already booked a call for ${formatWhen(lead.callback_at, settings.business.timezone)}, so confirm that time instead of asking for one.` : d.slots && d.slots.length ? slotAsk(d.slots) : (lead.phone || lead.email) ? 'Then ask what day and time suit them for a quick call. Ask only that one question.' : 'Then ask, in ONE question, what day and time suit them for a quick call and the best phone number to reach them on.'}`;
+    case 'OFFER_SLOTS':
+      return d.slots && d.slots.length
+        ? `The time they asked for (${d.requested}) is not available. Say so kindly in one short clause, without apologising at length, then ${slotAsk(d.slots)}`
+        : `The time they asked for (${d.requested}) is not available and no other slot is free in the next days. Say so kindly and tell them the team will message them with a time shortly. Ask nothing.`;
     case 'CONFIRM_CALLBACK':
       return `They just told you when they would like the call. Confirm it warmly in one short sentence that ends with a full stop, reading this time back exactly as written: ${d.when}. The person who will call is ${designer ? designer.name : 'a designer from the team'}. Do not use brackets. ${lead.phone || lead.email ? 'No question needed.' : 'Then, as a SEPARATE new sentence, ask for the best phone number to reach them on.'}`;
     case 'REMINDER':
@@ -112,9 +119,9 @@ function directiveBody(d, ctx) {
     case 'HANDOFF':
       return 'They want to talk to a person. Acknowledge warmly, say a team member will take over this chat and reach out shortly, and thank them. Do not ask any question.';
     case 'POST':
-      return `The enquiry is already with the team. Reply briefly and helpfully. If they gave new details, acknowledge them and say the team will use them. Answer questions only from the business facts. Do not start a new round of qualifying questions.${d.askCallback ? ' If it fits naturally, end by asking what day and time suit them for the designer call.' : ''}${d.askPhone ? ' If it fits naturally, also ask for the best phone number to reach them on.' : ''}`;
+      return `The enquiry is already with the team. Reply briefly and helpfully. If they gave new details, acknowledge them and say the team will use them. Answer questions only from the business facts. Do not start a new round of qualifying questions.${d.askCallback ? (d.slots && d.slots.length ? ` If it fits naturally, end by trying to book the call: ${slotAsk(d.slots)}` : ' If it fits naturally, end by asking what day and time suit them for the designer call.') : ''}${d.askPhone ? ' If it fits naturally, also ask for the best phone number to reach them on.' : ''}`;
     case 'FOLLOWUP':
-      return `They have not replied for a while (nudge ${d.n} of ${settings.followups.max}). Send a light, friendly 1 to 2 sentence nudge. ${d.field ? `Gently re-ask, in fresh words: ${FIELD_ASK_HINT[d.field]}.` : 'Check if they still need help.'} Never sound pushy or guilt-trip.`;
+      return `They have not replied for a while (nudge ${d.n} of ${settings.followups.max}). Send a light, friendly 1 to 2 sentence nudge. ${d.slots && d.slots.length ? `Gently remind them about booking the call and ${slotAsk(d.slots)}` : d.field ? `Gently re-ask, in fresh words: ${FIELD_ASK_HINT[d.field]}.` : 'Check if they still need help.'} Never sound pushy or guilt-trip.`;
     case 'DRIP':
       return 'They are a warm lead we are keeping in touch with. Send a short, genuinely useful check-in (one practical tip relevant to what they told you about their goals, or a simple "how are plans going?"). No hard sell. Do not ask for details. Invite them to reply if plans change.';
     default:
@@ -260,7 +267,7 @@ function fallbackReply(directive, ctx) {
     case 'ANSWER':
       return 'Good question. A designer can give you exact details on a free consultation, and I have noted it for them.';
     case 'CLOSE_ACTIVE':
-      return `Thank you ${first}, that is everything I need. ${designer ? `${designer.name} from our team` : 'A senior designer from our team'} will reach out within one working day. ${lead.phone || lead.email ? 'What day and time suit you for a quick call?' : 'What day and time suit you for a quick call, and what is the best number to reach you on?'}`;
+      return `Thank you ${first}, that is everything I need. ${designer ? `${designer.name} from our team` : 'A senior designer from our team'} will reach out within one working day. ${directive.slots && directive.slots.length ? `I can do ${directive.slots.join(', or ')} for a quick call. Which works best${lead.phone || lead.email ? '' : ', and what is the best number to reach you on'}?` : lead.phone || lead.email ? 'What day and time suit you for a quick call?' : 'What day and time suit you for a quick call, and what is the best number to reach you on?'}`;
     case 'CLOSE_NURTURE':
       return `Thanks ${first}, there is no rush at all. We will stay in touch, and you can message me here any time you are ready to take things forward.`;
     case 'CLOSE_DISQUALIFIED':
@@ -271,10 +278,12 @@ function fallbackReply(directive, ctx) {
       return `Of course, ${first}. I will pass this to a team member who will reach out shortly. Thank you for your patience.`;
     case 'CONFIRM_CALLBACK':
       return `Perfect, ${designer ? designer.name : 'our designer'} will call you ${directive.when}.${lead.phone || lead.email ? '' : ' What is the best number to reach you on?'}`;
+    case 'OFFER_SLOTS':
+      return directive.slots && directive.slots.length ? `Sorry, ${directive.requested} is not free. I can do ${directive.slots.join(', or ')}. Which works best for you?` : `Sorry, ${directive.requested} is not free. The team will message you with a time shortly.`;
     case 'REMINDER':
       return `Hi ${first}, a quick reminder that ${designer ? designer.name : 'our designer'} will call you ${directive.when ? `at ${directive.when}` : 'soon'}. Reply here if the time needs to change.`;
     case 'POST':
-      return `Noted, I have passed that on to the team.${directive.askCallback ? ' What day and time suit you for the designer call?' : directive.askPhone ? ' What is the best number to reach you on?' : ''}`;
+      return `Noted, I have passed that on to the team.${directive.askCallback ? (directive.slots && directive.slots.length ? ` I can do ${directive.slots.join(', or ')} for a call. Which works best?` : ' What day and time suit you for the designer call?') : directive.askPhone ? ' What is the best number to reach you on?' : ''}`;
     case 'FOLLOWUP':
       return directive.field ? `Hi ${first}, just checking in. ${FALLBACK_ASK[directive.field]}` : `Hi ${first}, just checking in. Do you still need help with your project?`;
     case 'DRIP':

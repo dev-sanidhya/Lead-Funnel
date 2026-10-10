@@ -10,6 +10,7 @@ const { Engine } = require('./engine');
 const { Telegram } = require('./telegram');
 const { Instagram } = require('./instagram');
 const { Scheduler } = require('./scheduler');
+const { Calendar, GoogleCalendar } = require('./calendar');
 const { Simulator } = require('./simulator');
 
 const SEED_DESIGNERS = [
@@ -32,6 +33,8 @@ async function createApp(config, { store, llmOverride, fetchImpl, debounceMs, lo
     debounceMs: debounceMs === undefined ? 1200 : debounceMs,
     transports: { sim: { send: async () => ({}) } },
   });
+  const calendar = new Calendar({ google: new GoogleCalendar({ account: config.googleServiceAccount, fetchImpl, log }), settings, log });
+  engine.calendar = calendar;
   const telegram = new Telegram({ token: config.telegramToken, engine, store, settings, config, log, fetchImpl });
   engine.transports.telegram = telegram.transport;
   const instagram = new Instagram({ cfg: config.instagram, engine, store, config, log, fetchImpl });
@@ -39,7 +42,7 @@ async function createApp(config, { store, llmOverride, fetchImpl, debounceMs, lo
   const scheduler = new Scheduler({ engine, store, settings, instagram, log });
   const simulator = new Simulator({ engine, store, settings, llm, log });
   if (seed && !(await store.listDesigners()).length) for (const d of SEED_DESIGNERS) await store.saveDesigner(d);
-  return { config, store, settings, llm, agent, engine, telegram, instagram, scheduler, simulator };
+  return { config, store, settings, llm, agent, engine, telegram, instagram, scheduler, simulator, calendar };
 }
 
 module.exports = { createApp };

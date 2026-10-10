@@ -20,7 +20,7 @@ class HttpError extends Error {
 }
 
 function createHandler(app) {
-  const { config, store, settings, engine, telegram, instagram, scheduler, simulator, llm } = app;
+  const { config, store, settings, engine, telegram, instagram, scheduler, simulator, llm, calendar } = app;
   const sessionKey = crypto.createHmac('sha256', `${config.adminPassword}|${config.intakeSecret}`).update('session-v1').digest('hex');
   const hits = new Map();
   const started = Date.now();
@@ -285,6 +285,7 @@ function createHandler(app) {
       stages: STAGES.map((s) => ({ id: s, label: STAGE_LABELS[s] })), status: await status(),
       telegram_link: telegram.deepLink('gform'), instagram_link: instagram.chatLink(), public_url: config.publicUrl,
       webhook_url: `${config.publicUrl}/webhook/instagram`, verify_token_set: !!config.instagram.verifyToken,
+      calendar: { configured: calendar.google.configured, email: calendar.google.email },
     });
   });
   route('GET', '/api/status', async (req, res) => send(res, 200, await status()));
@@ -464,6 +465,19 @@ function createHandler(app) {
   route('POST', '/api/scheduler/run', async (req, res) => {
     const b = await readBody(req);
     send(res, 200, await scheduler.tick({ force: !!b.force, includeSim: b.includeSim !== false }));
+  });
+  // Proves the app can write to the owner's calendar (adds and removes a tiny event).
+  route('POST', '/api/calendar/test', async (req, res) => {
+    const c = settings.get().calendar;
+    if (!calendar.google.configured) return send(res, 200, { ok: false, message: 'The app has no Google service account yet.' });
+    if (!c.calendar_id) return send(res, 200, { ok: false, message: 'Enter the calendar ID first.' });
+    try {
+      await calendar.google.test(c.calendar_id, settings.get().business.timezone);
+      const free = await calendar.offer();
+      send(res, 200, { ok: true, message: free.length ? `Connected. Next free times: ${engine.fmtSlots(free).join(' | ')}` : 'Connected, but no free time was found in your working hours.' });
+    } catch (e) {
+      send(res, 200, { ok: false, message: e.message });
+    }
   });
   route('POST', '/api/test-alert', async (req, res) => {
     const chat = settings.get().handoff.notify_chat_id;

@@ -32,6 +32,8 @@ module.exports = {
   // Postgres connection string (Supabase pooler). When set it replaces the local SQLite file.
   databaseUrl: env.DATABASE_URL || '',
   cronSecret: env.CRON_SECRET || '',
+  // Google service account (JSON) that books calls on the owner's calendar. See core/calendar.js.
+  googleServiceAccount: (() => { try { return env.GOOGLE_SERVICE_ACCOUNT_JSON ? JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON) : null; } catch { return null; } })(),
   serverless: !!(env.VERCEL || env.SERVERLESS),
   publicUrl: (env.PUBLIC_URL || `http://localhost:${num(env.PORT, 3000)}`).replace(/\/$/, ''),
   adminPassword: env.ADMIN_PASSWORD || 'demo',

@@ -11,6 +11,8 @@ const config = require('../core/config');
 const MIN = 60000;
 const HOUR = 3600000;
 const S = () => JSON.parse(JSON.stringify(DEFAULTS));
+// the same, with the optional quiet hours switched on (off by default)
+const Q = () => { const s = S(); s.followups.quiet_start_hour = 21; s.followups.quiet_end_hour = 9; return s; };
 const ist = (iso) => Date.parse(`${iso}+05:30`);
 const NOON = ist('2026-10-12T12:00:00'); // a Monday, midday in Mumbai
 
@@ -19,21 +21,27 @@ const ig = (o = {}) => ({
   created_at: NOON - 3 * HOUR, last_inbound_at: NOON, last_outbound_at: NOON + MIN, ...o,
 });
 
-test('first nudge goes out 45 minutes after the question, inside business hours', () => {
+test('first nudge goes out 8 hours after the question', () => {
   const p = plan(ig(), S(), NOON + 2 * MIN);
   assert.strictEqual(p.kind, 'followup');
   assert.strictEqual(p.step, 1);
-  assert.strictEqual(p.at, NOON + MIN + 45 * MIN);
+  assert.strictEqual(p.at, NOON + MIN + 8 * HOUR);
 });
 
-test('nothing is sent in quiet hours: an evening question is nudged next morning', () => {
+test('there are no quiet hours by default: a night-time nudge is sent when due', () => {
   const askedAt = ist('2026-10-12T21:30:00');
   const p = plan(ig({ last_inbound_at: askedAt - MIN, last_outbound_at: askedAt }), S(), askedAt + MIN);
+  assert.strictEqual(p.at, askedAt + 8 * HOUR);
+});
+
+test('optional quiet hours push a nudge to the next morning', () => {
+  const askedAt = ist('2026-10-12T21:30:00');
+  const p = plan(ig({ last_inbound_at: askedAt - MIN, last_outbound_at: askedAt }), Q(), askedAt + MIN);
   assert.strictEqual(p.at, ist('2026-10-13T09:00:00'));
 });
 
 test('quiet hours never push a nudge past the Instagram window: it is sent earlier instead', () => {
-  const s = S();
+  const s = Q();
   const inbound = ist('2026-10-12T10:00:00'); // window closes 23h later, at 09:00 next day
   const out = ist('2026-10-12T20:30:00');
   const p = plan(ig({ last_inbound_at: inbound, last_outbound_at: out }), s, out + MIN);
@@ -48,12 +56,10 @@ test('the last nudge is pulled forward to land inside the 24 hour window', () =>
   const p = plan(lead, s, inbound + 10 * HOUR + MIN);
   assert.strictEqual(p.kind, 'followup');
   assert.strictEqual(p.step, 2);
-  // 10h + 12h would be 22h after their message; the window (23h) minus a 3h margin makes it 20h,
-  // which is 8am: quiet hours move it to 9am, still inside the window
-  assert.strictEqual(p.at, ist('2026-10-13T09:00:00'));
-  const open = S();
-  open.followups.quiet_start_hour = 0; open.followups.quiet_end_hour = 0;
-  assert.strictEqual(plan(lead, open, inbound + 10 * HOUR + MIN).at, inbound + 20 * HOUR);
+  // 10h + 12h would be 22h after their message; the window (23h) minus a 3h margin makes it 20h
+  assert.strictEqual(p.at, inbound + 20 * HOUR);
+  // with quiet hours on, 20h is 8am, which moves to 9am, still inside the window
+  assert.strictEqual(plan(lead, Q(), inbound + 10 * HOUR + MIN).at, ist('2026-10-13T09:00:00'));
 });
 
 test('a customer reply restarts the sequence', () => {
@@ -120,10 +126,8 @@ test('two cron runs at the same moment send a follow-up exactly once', async () 
   const now = Date.now();
   const lead = await store.createLead({
     channel: 'instagram', chat_id: 'ig:77', name: 'Quiet', stage: 'qualifying', meta: { turns: 1 },
-    last_inbound_at: now - 2 * HOUR, last_outbound_at: now - 90 * MIN,
+    last_inbound_at: now - 9 * HOUR, last_outbound_at: now - 8.5 * HOUR,
   });
-  // Quiet hours would defer the nudge depending on when the suite runs, so open the whole day.
-  await app.settings.update({ followups: { quiet_start_hour: 0, quiet_end_hour: 0 } });
   const a = new Scheduler({ engine: app.engine, store, settings: app.settings, log: silent });
   const b = new Scheduler({ engine: app.engine, store, settings: app.settings, log: silent });
   const [ra, rb] = await Promise.all([a.tick(), b.tick()]);

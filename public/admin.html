@@ -566,6 +566,7 @@ async function openLead(id, { soft } = {}) {
       <div class="next ${l.next_step ? l.next_step.tone : 'idle'}">${ic(l.next_step && l.next_step.tone === 'urgent' ? 'alert' : 'check')}<div class="grow"><b>Next step</b>${esc(l.next_step ? l.next_step.text : '')}</div></div>
       ${l.next_auto ? `<div class="mute" style="margin:6px 2px 0;font-size:13px">${ic('clock', 'sm')} Automatic: ${esc(l.next_auto.label)} ${l.next_auto.at <= Date.now() ? 'is due now' : esc(whenText(l.next_auto.at))}${l.window_hours_left != null ? ` · Instagram window closes in ${l.window_hours_left < 1 ? 'under an hour' : Math.floor(l.window_hours_left) + 'h'}` : ''}</div>` : ''}
       <div class="glance"><b>The story so far</b><div style="margin-top:4px">${esc(l.brief || 'Still getting to know this customer.')}</div>${l.stage_reason ? `<div class="mute" style="margin-top:8px;font-size:13.5px">Why ${esc(S[l.stage].label.toLowerCase())}: ${esc(l.stage_reason)}</div>` : ''}</div>
+      ${d.meta && d.meta.memory && d.meta.memory.length ? `<div class="glance"><b>Details they shared</b><ul style="margin:6px 0 0 18px;padding:0">${d.meta.memory.map((m) => `<li>${esc(m)}</li>`).join('')}</ul></div>` : ''}
       ${l.last_customer ? `<div class="said"><span class="mute">Last thing they said, ${ago(l.last_customer.at)}</span><div>“${esc(l.last_customer.text)}”</div></div>` : ''}
     </div>
 

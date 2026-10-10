@@ -353,6 +353,15 @@ class Store {
   async recentMessages(leadId, n) {
     return (await this.all('SELECT * FROM messages WHERE lead_id=? ORDER BY id DESC LIMIT ?', leadId, n)).reverse();
   }
+  // What the model must remember, with no gap between the rolling summary and the live window:
+  // every message the summary does not yet cover (so nothing falls between them), and never fewer
+  // than `min` recent ones, capped at `max` so the prompt stays small however long the chat gets.
+  async contextMessages(leadId, { beforeId = null, summaryUpto = 0, min = 14, max = 40 } = {}) {
+    const rows = (await this.all(`SELECT * FROM messages WHERE lead_id=? ${beforeId ? 'AND id<?' : ''} ORDER BY id DESC LIMIT ?`, leadId, ...(beforeId ? [beforeId] : []), max)).reverse();
+    let firstUncovered = rows.findIndex((m) => m.id > summaryUpto);
+    if (firstUncovered === -1) firstUncovered = rows.length;
+    return rows.slice(Math.min(firstUncovered, Math.max(0, rows.length - min)));
+  }
   async countMessages(leadId) { return Number((await this.get('SELECT COUNT(*) c FROM messages WHERE lead_id=?', leadId)).c); }
 
   // ---- events ----

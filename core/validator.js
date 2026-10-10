@@ -17,7 +17,8 @@ const ASKS = {
 };
 
 function splitSentences(text) {
-  return String(text).match(/[^.!?\n]+[.!?]*(?:\s+|$)|\n+/g)?.map((s) => s.trim()).filter(Boolean) || [];
+  // a full stop between two digits (6.5 lakh, 4.5 weeks) is a decimal point, not the end of a sentence
+  return String(text).match(/(?:[^.!?\n]|(?<=\d)\.(?=\d))+[.!?]*(?:\s+|$)|\n+/g)?.map((s) => s.trim()).filter(Boolean) || [];
 }
 
 function isQuestion(s) { return /\?\s*$/.test(s) || /\b(please (share|tell|let me know)|could you (share|tell)|can you (share|tell))\b/i.test(s); }
@@ -33,8 +34,31 @@ function reasksKnown(sentence, lead) {
   return false;
 }
 
-// opts.maxQuestions: 1 for qualification turns, 0 for closings.
-function sanitizeReply(text, lead, { maxQuestions = 1, maxChars = 650 } = {}) {
+// Claims a model likes to invent: money, counts of clients/years/awards. A sentence making one is
+// only kept when the same number is written in the business facts or the customer's own details.
+const NUM = '(\\d[\\d,.]*)';
+const CLAIMS = [
+  new RegExp(`(?:₹|rs\\.?\\s?|inr\\s?|\\$|usd\\s?)${NUM}`, 'i'),
+  new RegExp(`${NUM}\\s?(?:lakhs?|crores?|cr|k)\\b`, 'i'),
+  new RegExp(`${NUM}\\+?\\s+(?:years?|yrs|brands?|clients?|campaigns?|awards?|creators?|influencers?|projects?|cities|countries|team members|followers|customers)`, 'i'),
+];
+const WORD_CLAIM = /\b(hundreds?|thousands?|dozens?|millions?)\s+of\s+(?:brands|clients|campaigns|creators|influencers|projects|customers)\b/i;
+const normNum = (d) => d.replace(/[,.]+$/, '').replace(/,/g, '');
+function digitsOf(text) { return new Set((String(text).match(/\d[\d,.]*/g) || []).map(normNum)); }
+function ungrounded(sentence, grounding) {
+  if (grounding === undefined || grounding === null) return false;
+  const known = digitsOf(grounding);
+  for (const rx of CLAIMS) {
+    const m = sentence.match(rx);
+    if (m && !known.has(normNum(m[1]))) return true;
+  }
+  const w = sentence.match(WORD_CLAIM);
+  return !!(w && !new RegExp(w[1], 'i').test(grounding));
+}
+
+// opts.maxQuestions: 1 for qualification turns, 0 for closings. opts.grounding: the text of facts a reply may rely on.
+
+function sanitizeReply(text, lead, { maxQuestions = 1, maxChars = 650, grounding } = {}) {
   if (!text) return '';
   let t = String(text)
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -53,6 +77,7 @@ function sanitizeReply(text, lead, { maxQuestions = 1, maxChars = 650 } = {}) {
   let questions = 0;
   for (const s of splitSentences(t)) {
     if (reasksKnown(s, lead)) continue;
+    if (ungrounded(s, grounding)) continue;
     if (isQuestion(s)) {
       if (questions >= maxQuestions) continue;
       questions++;
@@ -68,4 +93,4 @@ function sanitizeReply(text, lead, { maxQuestions = 1, maxChars = 650 } = {}) {
   return out.trim();
 }
 
-module.exports = { sanitizeReply, reasksKnown };
+module.exports = { sanitizeReply, reasksKnown, ungrounded };

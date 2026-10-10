@@ -33,6 +33,11 @@ function extractContact(text) {
 
 // Returns { patch, changed, meta } where patch holds column updates and meta is
 // the updated lead.meta object (flags, refusal counters, declined fields).
+// "Did I say my budget was 20 lakh?" asks about the record, it does not change it. A model sometimes reads
+// such a question as a new statement, so the code refuses to let a recall question edit anything.
+const CONFIRM_QUESTION = /\b(did i (say|tell|mention|give|share)|didn'?t i (say|tell|mention)|have i (said|told|mentioned)|do you (remember|recall)|remind me|what (was|is|were) my|what did i|you said (that )?(my|the))\b/i;
+const isConfirmQuestion = (text) => CONFIRM_QUESTION.test(String(text || '')) && /\?/.test(String(text || ''));
+
 function applyFacts(lead, f, userText, { lastAsked = null, settings, now = Date.now() }) {
   f = f && typeof f === 'object' ? f : {};
   const patch = {};
@@ -41,6 +46,7 @@ function applyFacts(lead, f, userText, { lastAsked = null, settings, now = Date.
   meta.flags = meta.flags || {};
   meta.declined = meta.declined || {};
   meta.refusals = meta.refusals || {};
+  if (isConfirmQuestion(userText)) return { patch, changed, meta }; // a question about the record never edits it
   const set = (col, val) => {
     if (val === null || val === undefined || val === '') return;
     if (lead[col] === val) return;
@@ -77,6 +83,19 @@ function applyFacts(lead, f, userText, { lastAsked = null, settings, now = Date.
     if (typeof f.timeline_text === 'string' && f.timeline_text.trim()) set('timeline_text', clip(f.timeline_text, 60));
   }
 
+  // Append-only memory: every concrete detail the customer states, kept word for word, never compressed away.
+  if (Array.isArray(f.details) && f.details.length) {
+    const have = Array.isArray(meta.memory) ? meta.memory.slice() : [];
+    const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    for (const d of f.details.slice(0, 8)) {
+      if (typeof d !== 'string') continue;
+      const t = clip(d.replace(/[‒-―]/g, ', '), 110);
+      if (t.length < 4 || /^(null|none|n\/a|unknown)$/i.test(t)) continue;
+      if (have.some((h) => norm(h) === norm(t) || norm(h).includes(norm(t)) || norm(t).includes(norm(h)))) continue;
+      have.push(t);
+    }
+    meta.memory = have.slice(-80);
+  }
   if (typeof f.notes === 'string' && f.notes.trim() && f.notes.trim().toLowerCase() !== 'null') {
     const prev = lead.notes || '';
     const add = clip(f.notes, 160);
@@ -146,4 +165,4 @@ function applyFacts(lead, f, userText, { lastAsked = null, settings, now = Date.
   return { patch, changed, meta };
 }
 
-module.exports = { applyFacts, extractContact };
+module.exports = { applyFacts, extractContact, isConfirmQuestion };

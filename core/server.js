@@ -312,7 +312,7 @@ function createHandler(app) {
       messages: await store.getMessages(lead.id),
       events: await store.getEvents(lead.id),
       telegram_url: lead.chat_id ? null : chatLinks(lead).chat_url,
-      meta: { fu: lead.meta.fu || {}, declined: lead.meta.declined || {}, flags: lead.meta.flags || {}, asked: lead.meta.asked || {}, followups_sent: lead.meta.followups_sent || 0, drips_sent: lead.meta.drips_sent || 0 },
+      meta: { memory: lead.meta.memory || [], fu: lead.meta.fu || {}, declined: lead.meta.declined || {}, flags: lead.meta.flags || {}, asked: lead.meta.asked || {}, followups_sent: lead.meta.followups_sent || 0, drips_sent: lead.meta.drips_sent || 0 },
     });
   });
   route('PATCH', '/api/leads/:id', async (req, res, { params }) => {

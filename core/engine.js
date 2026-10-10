@@ -29,7 +29,7 @@ const { toLocalIso, pickOrdinal } = require('./calendar');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const FINAL = new Set(['active', 'nurture', 'disqualified']);
 const HISTORY_WINDOW = 14;
-const SUMMARY_EVERY = 8;
+const MIN_OVERFLOW = 6; // summarise once this many messages have scrolled out of the live window
 const MAX_ASKS_PER_FIELD = 3;
 const LEASE_MS = 75000;
 const IN_CLAUSE = (ids) => ids.map(() => '?').join(',');
@@ -267,7 +267,7 @@ class Engine extends EventEmitter {
     const stopTyping = this.keepTyping(lead);
     try {
       this.stats.turns++;
-      const history = (await this.store.all('SELECT * FROM messages WHERE lead_id=? AND id<? ORDER BY id DESC LIMIT ?', leadId, rowIds[0], 20)).reverse();
+      const history = await this.store.contextMessages(leadId, { beforeId: rowIds[0], summaryUpto: lead.summary_upto });
       const lastAsked = lead.meta.last_asked || null;
 
       // 1. Extract facts (LLM), tolerate failure.
@@ -678,7 +678,7 @@ class Engine extends EventEmitter {
           meta.fu_streak = { inbound_at: lead.last_inbound_at || 0, followups: st.followups, drips: st.drips + 1 };
           directive = { type: 'DRIP' };
         }
-        const history = await this.store.recentMessages(leadId, HISTORY_WINDOW);
+        const history = await this.store.contextMessages(leadId, { summaryUpto: lead.summary_upto });
         const reply = await this.compose({ ...lead, meta }, directive, settings, history);
         const id = await this.store.tx(async (t) => {
           await t.updateLead(leadId, { meta });
@@ -921,16 +921,15 @@ class Engine extends EventEmitter {
   async maybeSummarize(leadId) {
     if (this.summarizing.has(leadId)) return;
     const lead = await this.store.getLead(leadId);
-    if (!lead || lead.meta.turns % SUMMARY_EVERY !== 0) return;
-    const total = await this.store.countMessages(leadId);
-    if (total <= HISTORY_WINDOW) return;
+    if (!lead) return;
     this.summarizing.add(leadId);
     try {
-      // Fold everything that has fallen out of the live window into the summary.
+      // Everything that has scrolled out of the live window and is not yet in the summary.
       const old = (await this.store.all('SELECT * FROM messages WHERE lead_id=? AND id>? ORDER BY id DESC LIMIT 400 OFFSET ?', leadId, lead.summary_upto, HISTORY_WINDOW)).reverse();
-      if (!old.length) return;
+      if (old.length < MIN_OVERFLOW) return;
       const summary = await this.agent.summarize(lead, lead.summary, old, this.settings.get());
-      await this.store.updateLead(leadId, { summary, summary_upto: old[old.length - 1].id });
+      // compare-and-swap on summary_upto: if another instance summarised meanwhile, keep theirs
+      await this.store.run('UPDATE leads SET summary=?, summary_upto=?, updated_at=? WHERE id=? AND summary_upto=?', summary, old[old.length - 1].id, Date.now(), leadId, lead.summary_upto);
       this.changed('lead', leadId);
     } catch (e) {
       this.log.warn('[engine] summarize failed', e.message);

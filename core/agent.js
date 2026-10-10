@@ -100,7 +100,7 @@ function directiveBody(d, ctx) {
     case 'CONFIRM_CALLBACK':
       return `They just told you when they would like the call. Confirm it warmly in one short sentence that ends with a full stop, reading this time back exactly as written: ${d.when}. The person who will call is ${designer ? designer.name : 'a designer from the team'}. Do not use brackets. ${lead.phone || lead.email ? 'No question needed.' : 'Then, as a SEPARATE new sentence, ask for the best phone number to reach them on.'}`;
     case 'REMINDER':
-      return `Send a short, friendly reminder that ${designer ? designer.name : 'a designer'} will call them ${d.when ? `at ${d.when}` : 'soon'}. Invite them to reply here if the time needs to change. Do not ask any question.`;
+      return `Send a short, friendly reminder (1 or 2 sentences) that ${designer ? designer.name : 'a brand lead'} will call them ${d.when ? `at ${d.when}` : 'soon'}. That is the one confirmed time: say it exactly as written and do NOT mention, guess or offer any other day or time, even if the earlier chat discussed one. Say they can reply here if they need to change it. Do not ask any question.`;
     case 'CLOSE_NURTURE':
       return `Internal reason (never mention it): ${d.reason}. Thank them warmly, say there is no rush, that the team will stay in touch and happily help whenever they are ready, and that they can message here any time. Do not ask any question. Do not pressure.`;
     case 'CLOSE_DISQUALIFIED':

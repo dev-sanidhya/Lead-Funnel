@@ -52,6 +52,8 @@ class Llm {
     this.stamps = [];
     this.tok = {};
     this.cool = {}; // provider name -> epoch ms until which it is skipped
+    this.usage = {};
+    this.onUsage = null;
     this.stats = { calls: 0, failures: 0, fallbacks: 0, lastOkAt: null, lastError: null, lastLatencyMs: null, lastProvider: null };
     this.override = null; // tests / offline mode: async ({system, messages, json}) => string
   }
@@ -83,6 +85,15 @@ class Llm {
     const arr = (this.tok[key] || []).filter((x) => t - x.t < 60000);
     this.tok[key] = arr;
     return arr.reduce((n, x) => n + x.n, 0);
+  }
+  // Exact token counts as the provider reports them, in memory (this.usage) and, through onUsage, in the database.
+  record(provider, model, usage) {
+    const u = usage || {};
+    const prompt = Number(u.prompt_tokens) || 0;
+    const completion = Number(u.completion_tokens) || 0;
+    const row = (this.usage[model] = this.usage[model] || { calls: 0, prompt: 0, completion: 0 });
+    row.calls++; row.prompt += prompt; row.completion += completion;
+    if (this.onUsage) { try { this.onUsage({ provider, model, prompt, completion }); } catch { /* accounting must never break a reply */ } }
   }
   hasRoom(c, est) { return !c.provider.tpm || this.used(c.key) + est <= c.provider.tpm; }
 
@@ -120,6 +131,7 @@ class Llm {
       }
       const data = await res.json();
       if (data.usage && data.usage.total_tokens) entry.n = data.usage.total_tokens;
+      this.record(provider.name, model, data.usage);
       const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
       if (!text || !String(text).trim()) throw new LlmError('LLM returned empty content');
       this.stats.lastLatencyMs = Date.now() - t0;

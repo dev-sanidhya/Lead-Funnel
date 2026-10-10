@@ -4,9 +4,10 @@
 const config = require('../src/config');
 const { Store } = require('../src/db');
 const { Settings } = require('../src/settings');
-const store = new Store(config.dbPath);
+(async () => {
+const store = await Store.open({ url: config.databaseUrl, file: config.dbPath });
 const settings = new Settings(store);
-settings.update({
+await settings.update({
   business: {
     name: 'Glad U Came',
     tagline: 'India\'s PR and influencer marketing agency',
@@ -37,7 +38,8 @@ const team = [
   { name: 'Dev Malhotra', title: 'Brand Lead, Fashion and Celebrity', specialties: 'Celebrity gifting, PR and media', cities: '', bio: 'Fashion PR and celebrity relations.' },
   { name: 'Ishaan Kulkarni', title: 'Brand Lead, Digital and Social', specialties: 'Social media, Other', cities: 'Bangalore, Pune', bio: 'Social, UGC and performance creators.' },
 ];
-const ds = store.listDesigners();
-team.forEach((t, i) => store.saveDesigner({ ...(ds[i] ? { id: ds[i].id } : {}), ...t, min_budget: 0 }));
-console.log('niche applied:', settings.get().business.name, '|', store.listDesigners().map((d) => d.name).join(', '));
-store.close();
+const ds = await store.listDesigners();
+for (const [i, t] of team.entries()) await store.saveDesigner({ ...(ds[i] ? { id: ds[i].id } : {}), ...t, min_budget: 0 });
+console.log('niche applied:', settings.get().business.name, '|', (await store.listDesigners()).map((d) => d.name).join(', '));
+await store.close();
+})().catch((e) => { console.error(e); process.exit(1); });

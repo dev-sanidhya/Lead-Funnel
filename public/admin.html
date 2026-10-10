@@ -564,6 +564,7 @@ async function openLead(id, { soft } = {}) {
     <div class="quick">
       <div class="quick-head"><b>Quick summary</b><span class="mute">Everything you need to move this forward</span></div>
       <div class="next ${l.next_step ? l.next_step.tone : 'idle'}">${ic(l.next_step && l.next_step.tone === 'urgent' ? 'alert' : 'check')}<div class="grow"><b>Next step</b>${esc(l.next_step ? l.next_step.text : '')}</div></div>
+      ${l.next_auto ? `<div class="mute" style="margin:6px 2px 0;font-size:13px">${ic('clock', 'sm')} Automatic: ${esc(l.next_auto.label)} ${l.next_auto.at <= Date.now() ? 'is due now' : esc(whenText(l.next_auto.at))}${l.window_hours_left != null ? ` · Instagram window closes in ${l.window_hours_left < 1 ? 'under an hour' : Math.floor(l.window_hours_left) + 'h'}` : ''}</div>` : ''}
       <div class="glance"><b>The story so far</b><div style="margin-top:4px">${esc(l.brief || 'Still getting to know this customer.')}</div>${l.stage_reason ? `<div class="mute" style="margin-top:8px;font-size:13.5px">Why ${esc(S[l.stage].label.toLowerCase())}: ${esc(l.stage_reason)}</div>` : ''}</div>
       ${l.last_customer ? `<div class="said"><span class="mute">Last thing they said, ${ago(l.last_customer.at)}</span><div>“${esc(l.last_customer.text)}”</div></div>` : ''}
     </div>
@@ -753,12 +754,15 @@ async function tabReminders() {
   const f = SET().followups;
   $('#tabBody').innerHTML = `<div class="stack"><div class="card"><h2>Call reminders</h2><div class="help">When a customer books a call, the assistant reminds them beforehand. On Instagram it can only message within 24 hours of their last message; if that has passed, the lead shows up under "Needs you now" so you can follow up yourself.</div>
     <div class="grid2"><div><label class="f">Remind them this long before (minutes)</label><input id="rb" type="number" min="0" value="${f.reminder_before_min}"></div><div><label class="f">Flag a call as overdue after (minutes)</label><input id="ro" type="number" min="0" value="${f.overdue_after_min}"></div></div></div>
-  <div class="card"><h2>Nudges for quiet customers</h2><div class="help">If someone stops replying mid-chat, the assistant sends a gentle nudge, then moves them to Nurture.</div>
+  <div class="card"><h2>Nudges for quiet customers</h2><div class="help">If someone stops replying mid-chat, the assistant sends a gentle nudge. On Instagram it can only write within 24 hours of their last message, so the last nudge is sent early enough to land inside that window; if the window closes first the lead appears under "Needs you now" for you to follow up by hand. Nothing is sent in quiet hours. Each time the customer replies, the count starts again.</div>
     <label class="tog" style="margin-top:12px"><input type="checkbox" id="fe" ${f.enabled ? 'checked' : ''}> Send nudges</label>
-    <div class="grid2"><div><label class="f">First nudge after (minutes)</label><input id="f1" type="number" min="0" value="${f.first_after_min}"></div><div><label class="f">Second nudge after (minutes)</label><input id="f2" type="number" min="0" value="${f.second_after_min}"></div><div><label class="f">Most nudges to send</label><input id="fm" type="number" min="0" value="${f.max}"></div><div><label class="f">Nurture check-in every (days)</label><input id="fd" type="number" min="0" value="${f.nurture_every_days}"></div><div><label class="f">Most check-ins</label><input id="fn" type="number" min="0" value="${f.nurture_max}"></div></div>
+    <div class="grid2"><div><label class="f">First nudge after (minutes)</label><input id="f1" type="number" min="0" value="${f.first_after_min}"></div><div><label class="f">Next nudge after the previous one (minutes)</label><input id="f2" type="number" min="0" value="${f.second_after_min}"></div><div><label class="f">Most nudges to send</label><input id="fm" type="number" min="0" value="${f.max}"></div><div><label class="f">Nurture check-in every (days)</label><input id="fd" type="number" min="0" value="${f.nurture_every_days}"></div><div><label class="f">Most check-ins</label><input id="fn" type="number" min="0" value="${f.nurture_max}"></div>
+      <div><label class="f">Send the last nudge this long before the Instagram window closes (minutes)</label><input id="flm" type="number" min="0" value="${f.last_call_margin_min}"></div><div><label class="f">Hand over to you after the last nudge (minutes, non-Instagram)</label><input id="fsa" type="number" min="0" value="${f.stall_after_min}"></div>
+      <div><label class="f">Quiet hours start (0 to 24, business time)</label><input id="fqs" type="number" min="0" max="24" value="${f.quiet_start_hour}"></div><div><label class="f">Quiet hours end (0 to 24)</label><input id="fqe" type="number" min="0" max="24" value="${f.quiet_end_hour}"></div>
+      <div><label class="f">Ask you to reach out if a form lead has not opened the chat after (minutes)</label><input id="fcn" type="number" min="0" value="${f.chat_nudge_after_min}"></div></div>
     <button class="btn primary" style="margin-top:18px" id="saveF">Save</button></div>
   <div class="card"><h2>Skip ahead (for demos)</h2><div class="help">Pretend the waiting time has passed. Reminders and nudges go out now, and quiet leads move along.</div><div class="row" style="margin-top:12px"><button class="btn" id="ff">${ic('bolt', 'sm')} Run reminders and nudges now</button><span class="mute" id="ffOut"></span></div></div></div>`;
-  $('#saveF').onclick = act(async () => saveSettings({ followups: { enabled: chk('fe'), first_after_min: val('f1'), second_after_min: val('f2'), max: val('fm'), nurture_every_days: val('fd'), nurture_max: val('fn'), reminder_before_min: val('rb'), overdue_after_min: val('ro') } }));
+  $('#saveF').onclick = act(async () => saveSettings({ followups: { enabled: chk('fe'), first_after_min: val('f1'), second_after_min: val('f2'), max: val('fm'), nurture_every_days: val('fd'), nurture_max: val('fn'), reminder_before_min: val('rb'), overdue_after_min: val('ro'), last_call_margin_min: val('flm'), stall_after_min: val('fsa'), quiet_start_hour: val('fqs'), quiet_end_hour: val('fqe'), chat_nudge_after_min: val('fcn') } }));
   $('#ff').onclick = act(async () => { const r = await api('/api/scheduler/run', { method: 'POST', body: { force: true, includeSim: state.includeSim } }); $('#ffOut').textContent = `Sent ${r.reminders} reminder(s) and ${r.followups + r.drips} nudge(s). ${r.manual} need you to follow up by hand.`; });
 }
 async function tabConnect() {
@@ -792,25 +796,33 @@ async function tabConnect() {
 }
 
 // ---------- live updates ----------
-let refreshTimer;
+let refreshTimer; let pulseV = null; let pulseTimer = null;
+async function refreshLive() {
+  try {
+    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement && document.activeElement.tagName);
+    if (state.view === 'today') viewToday();
+    else if (state.view === 'leads' && !typing) viewLeads();
+    else if (state.view === 'calls') viewCalls();
+    else if (state.view === 'chat') refreshChat();
+    else await loadLeads();
+    if (state.openLead && !typing) openLead(state.openLead, { soft: true });
+  } catch { /* retried on the next change */ }
+}
+// The server cannot hold a connection open, so ask for a tiny fingerprint every few seconds and reload only when it changes.
 function connectStream() {
-  const es = new EventSource('/api/stream');
-  es.onmessage = (m) => {
-    let ev = {}; try { ev = JSON.parse(m.data); } catch { return; }
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(async () => {
-      try {
-        if (ev.type === 'sim') { state.sim = await api('/api/sim/state'); renderSim(); }
-        const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement && document.activeElement.tagName);
-        if (state.view === 'today') viewToday();
-        else if (state.view === 'leads' && !typing) viewLeads();
-        else if (state.view === 'calls') viewCalls();
-        else if (state.view === 'chat') refreshChat();
-        else await loadLeads();
-        if (state.openLead && (!ev.leadId || ev.leadId === state.openLead) && !typing) openLead(state.openLead, { soft: true });
-      } catch { /* retried on the next event */ }
-    }, 400);
+  clearInterval(pulseTimer);
+  const tick = async () => {
+    if (document.hidden) return;
+    try {
+      const r = await fetch('/api/pulse');
+      if (!r.ok) return;
+      const p = await r.json();
+      if (pulseV !== null && p.v !== pulseV) { clearTimeout(refreshTimer); refreshTimer = setTimeout(async () => { if (p.sim) { try { state.sim = await api('/api/sim/state'); renderSim(); } catch { /* optional */ } } refreshLive(); }, 150); }
+      pulseV = p.v;
+    } catch { /* offline: the next tick tries again */ }
   };
+  tick(); pulseTimer = setInterval(tick, 3500);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 }
 
 // ---------- login / boot ----------

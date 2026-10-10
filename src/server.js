@@ -139,7 +139,7 @@ function createHandler(app) {
   }
 
   async function stats(includeSim) {
-    const leads = await store.listLeads({ limit: 10000 }).filter((l) => includeSim || l.channel !== 'sim');
+    const leads = (await store.listLeads({ limit: 10000 })).filter((l) => includeSim || l.channel !== 'sim');
     const byStage = Object.fromEntries(STAGES.map((s) => [s, 0]));
     let scoreSum = 0;
     let scoreN = 0;

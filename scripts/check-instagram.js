@@ -20,7 +20,7 @@ let failed = 0;
   c.handle ? ok(`INSTAGRAM_HANDLE = @${c.handle}`) : bad('INSTAGRAM_HANDLE is missing');
   /^https:\/\//.test(config.publicUrl) ? ok(`PUBLIC_URL = ${config.publicUrl}`) : bad(`PUBLIC_URL is ${config.publicUrl}; Meta needs a public https URL`);
 
-  const ig = new Instagram({ cfg: c, engine: null, store: new Store(':memory:'), config, log: { log() {}, warn() {}, error() {} } });
+  const ig = new Instagram({ cfg: c, engine: null, store: await Store.open({ file: ':memory:' }), config, log: { log() {}, warn() {}, error() {} } });
   if (c.accessToken) {
     console.log('\nAccess token');
     try {

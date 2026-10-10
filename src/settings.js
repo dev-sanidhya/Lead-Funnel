@@ -33,9 +33,14 @@ const DEFAULTS = {
   },
   followups: {
     enabled: true,
-    first_after_min: 60,
-    second_after_min: 1440,
+    first_after_min: 45,
+    second_after_min: 720,
     max: 2,
+    last_call_margin_min: 180,
+    stall_after_min: 720,
+    chat_nudge_after_min: 30,
+    quiet_start_hour: 21,
+    quiet_end_hour: 9,
     nurture_every_days: 7,
     nurture_max: 3,
     reminder_before_min: 60,
@@ -83,7 +88,9 @@ function sanitize(s) {
   s.business.services = listish(s.business.services);
   const f = s.followups;
   f.enabled = !!f.enabled;
-  for (const k of ['first_after_min', 'second_after_min', 'max', 'nurture_every_days', 'nurture_max', 'reminder_before_min', 'overdue_after_min']) f[k] = Math.max(0, Number(f[k]) || 0);
+  for (const k of ['first_after_min', 'second_after_min', 'max', 'nurture_every_days', 'nurture_max', 'reminder_before_min', 'overdue_after_min', 'last_call_margin_min', 'stall_after_min', 'chat_nudge_after_min']) f[k] = Math.max(0, Number(f[k]) || 0);
+  f.quiet_start_hour = Math.min(24, Math.max(0, Math.round(Number(f.quiet_start_hour)) || 0));
+  f.quiet_end_hour = Math.min(24, Math.max(0, Math.round(Number(f.quiet_end_hour)) || 0));
   try { new Intl.DateTimeFormat('en-US', { timeZone: s.business.timezone }); } catch { s.business.timezone = 'Asia/Kolkata'; }
   s.agent.reveal_minimum = !!s.agent.reveal_minimum;
   s.channels.primary = ['auto', 'instagram', 'telegram'].includes(s.channels.primary) ? s.channels.primary : 'auto';
@@ -94,15 +101,25 @@ function sanitize(s) {
 }
 
 class Settings {
-  constructor(store) { this.store = store; this.cache = null; }
-  get() {
-    if (!this.cache) this.cache = sanitize(merge(DEFAULTS, this.store.settingsRaw()));
+  constructor(store, { maxAgeMs = 3000 } = {}) { this.store = store; this.cache = null; this.loadedAt = 0; this.maxAgeMs = maxAgeMs; }
+  // Serverless instances cannot share memory, so the database is the truth: call refresh()
+  // at the start of every request or job and get() then stays synchronous.
+  async refresh({ force = false } = {}) {
+    if (!force && this.cache && Date.now() - this.loadedAt < this.maxAgeMs) return this.cache;
+    this.cache = sanitize(merge(DEFAULTS, await this.store.settingsRaw()));
+    this.loadedAt = Date.now();
     return this.cache;
   }
-  update(patch) {
+  get() {
+    if (!this.cache) throw new Error('Settings not loaded yet: await settings.refresh() first');
+    return this.cache;
+  }
+  async update(patch) {
+    await this.refresh({ force: true });
     const next = sanitize(merge(this.get(), patch));
-    for (const k of Object.keys(DEFAULTS)) this.store.settingsSetRaw(k, next[k]);
+    for (const k of Object.keys(DEFAULTS)) await this.store.settingsSetRaw(k, next[k]);
     this.cache = next;
+    this.loadedAt = Date.now();
     return next;
   }
 }

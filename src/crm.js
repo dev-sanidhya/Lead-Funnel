@@ -16,7 +16,7 @@ const MAX_ATTEMPTS = 8;
 async function deliverWebhooks(store, settings, { fetchImpl = globalThis.fetch, log = console } = {}) {
   const { webhook_url: url, webhook_secret: secret } = settings.get().handoff;
   if (!url) return { sent: 0, failed: 0 };
-  const rows = store.all("SELECT * FROM webhook_outbox WHERE status='pending' AND next_at<=? ORDER BY id LIMIT 25", Date.now());
+  const rows = await store.all("SELECT * FROM webhook_outbox WHERE status='pending' AND next_at<=? ORDER BY id LIMIT 25", Date.now());
   let sent = 0;
   let failed = 0;
   for (const r of rows) {
@@ -28,13 +28,13 @@ async function deliverWebhooks(store, settings, { fetchImpl = globalThis.fetch, 
       const t = setTimeout(() => ctrl.abort(), 8000);
       const res = await fetchImpl(url, { method: 'POST', headers, body, signal: ctrl.signal }).finally(() => clearTimeout(t));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      store.run("UPDATE webhook_outbox SET status='sent', attempts=attempts+1, last_error=NULL WHERE id=?", r.id);
+      await store.run("UPDATE webhook_outbox SET status='sent', attempts=attempts+1, last_error=NULL WHERE id=?", r.id);
       sent++;
     } catch (e) {
       failed++;
       const attempts = r.attempts + 1;
       const dead = attempts >= MAX_ATTEMPTS;
-      store.run('UPDATE webhook_outbox SET attempts=?, status=?, next_at=?, last_error=? WHERE id=?',
+      await store.run('UPDATE webhook_outbox SET attempts=?, status=?, next_at=?, last_error=? WHERE id=?',
         attempts, dead ? 'dead' : 'pending', Date.now() + Math.min(3600000, 30000 * 2 ** attempts), String(e.message).slice(0, 200), r.id);
       if (dead) log.warn('[crm] webhook gave up on event', r.id, e.message);
     }

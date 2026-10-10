@@ -11,24 +11,26 @@ const { FIELD_LABELS } = require('./qualify');
 const { formatWhen } = require('./when');
 
 const FIELD_ASK_HINT = {
-  project_type: 'what kind of space or project it is (for example full home, kitchen, office or renovation)',
+  project_type: 'what kind of project or service they are after (use the exact service names from the business facts, never invent options)',
   city: 'which city or area the project is in',
   budget: 'roughly what budget they have in mind (a ballpark or range is perfectly fine)',
   timeline: 'when they are hoping to start or move in',
+  callback: 'what day and time suit them for a quick call with the team',
 };
 
 const FALLBACK_ASK = {
-  project_type: 'What kind of space are you planning: a full home, kitchen, office or a renovation?',
+  project_type: 'What kind of project do you have in mind?',
   city: 'Which city is the project in?',
   budget: 'Roughly what budget do you have in mind? A ballpark is fine.',
   timeline: 'When are you hoping to start or move in?',
+  callback: 'What day and time suit you for a quick call with our team?',
 };
 
 // Used only when the AI is unreachable: different wording each time so it never loops.
 const ALT_ASK = {
   project_type: [
-    'Sorry, I want to make sure I get this right. Is it a whole home, just a kitchen or wardrobes, an office, or a renovation?',
-    'No problem, tell me in your own words what space you would like to work on and I will take it from there.',
+    'Sorry, I want to make sure I get this right. Could you tell me a little about what you are planning?',
+    'No problem, tell me in your own words what you have in mind and I will take it from there.',
   ],
   city: [
     'And which city is the property in? Even just the city name is perfect.',
@@ -114,7 +116,7 @@ function directiveBody(d, ctx) {
     case 'FOLLOWUP':
       return `They have not replied for a while (nudge ${d.n} of ${settings.followups.max}). Send a light, friendly 1 to 2 sentence nudge. ${d.field ? `Gently re-ask, in fresh words: ${FIELD_ASK_HINT[d.field]}.` : 'Check if they still need help.'} Never sound pushy or guilt-trip.`;
     case 'DRIP':
-      return 'They are a warm lead we are keeping in touch with. Send a short, genuinely useful check-in (one practical interior or planning tip relevant to their project, or a simple "how are plans going?"). No hard sell. Do not ask for details. Invite them to reply if plans change.';
+      return 'They are a warm lead we are keeping in touch with. Send a short, genuinely useful check-in (one practical tip relevant to what they told you about their goals, or a simple "how are plans going?"). No hard sell. Do not ask for details. Invite them to reply if plans change.';
     default:
       return 'Reply helpfully and briefly.';
   }

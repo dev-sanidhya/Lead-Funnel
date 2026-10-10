@@ -6,7 +6,7 @@ const { DEFAULTS, merge, sanitize } = require('../src/settings');
 
 const S = sanitize(merge(DEFAULTS, {}));
 
-test('reads the message our own form writes, with no AI at all', () => {
+test('reads the message our own form writes, with no AI at all', async () => {
   const msg = "Hi! I'm Sanidhya. I'd like help with full home interiors, bedrooms and bathrooms for my 2BHK apartment in Rohini, Delhi. My budget is around ₹10 to 20 lakh. I'd like to get started within a month. Afternoon is the best time to reach me. I like Premium interior designing.";
   const f = quickFacts(msg, null, S);
   assert.strictEqual(f.project_type, 'Full home');
@@ -17,7 +17,7 @@ test('reads the message our own form writes, with no AI at all', () => {
   assert.strictEqual(f.timeline_months, 1);
 });
 
-test('short answers to the question just asked are understood', () => {
+test('short answers to the question just asked are understood', async () => {
   assert.strictEqual(quickFacts('a full homw', 'project_type', S).project_type, 'Full home', 'the typo from the real chat');
   assert.strictEqual(quickFacts('A full home', 'project_type', S).project_type, 'Full home');
   assert.strictEqual(quickFacts('modular kitchen please', 'project_type', S).project_type, 'Modular kitchen');
@@ -30,7 +30,7 @@ test('short answers to the question just asked are understood', () => {
   assert.strictEqual(quickFacts('next year', 'timeline', S).timeline_months, 12);
 });
 
-test('does not invent facts from unrelated text', () => {
+test('does not invent facts from unrelated text', async () => {
   const f = quickFacts('what is the price of a sofa', null, S);
   assert.strictEqual(f.project_type, undefined);
   assert.strictEqual(f.city, undefined);

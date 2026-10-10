@@ -8,7 +8,7 @@ const { DEFAULTS, merge, sanitize } = require('../src/settings');
 const S = () => sanitize(merge(DEFAULTS, {}));
 const lead = (o = {}) => ({ meta: {}, stage: 'qualifying', ...o });
 
-test('parseAmount handles lakh, crore, k, ranges and commas', () => {
+test('parseAmount handles lakh, crore, k, ranges and commas', async () => {
   assert.strictEqual(parseAmount('8 lakh'), 800000);
   assert.strictEqual(parseAmount('around 12L'), 1200000);
   assert.strictEqual(parseAmount('8-10 lakhs'), 1000000);
@@ -21,7 +21,7 @@ test('parseAmount handles lakh, crore, k, ranges and commas', () => {
   assert.strictEqual(parseAmount('800000', { allowBare: true }), 800000);
 });
 
-test('times, sizes and durations are never mistaken for money', () => {
+test('times, sizes and durations are never mistaken for money', async () => {
   const { amountSupportedByText, isBareNumberAnswer } = require('../src/budget');
   assert.strictEqual(parseAmount('how about next Wednesday at 10 am?', { allowBare: true }), null);
   assert.strictEqual(parseAmount('3 bhk, start in 2 months', { allowBare: true }), null);
@@ -35,7 +35,7 @@ test('times, sizes and durations are never mistaken for money', () => {
   assert.strictEqual(amountSupportedByText(1000000, 'my budget is unlimited'), false);
 });
 
-test('applyFacts rejects hallucinated budgets and keeps explicit ones', () => {
+test('applyFacts rejects hallucinated budgets and keeps explicit ones', async () => {
   const { applyFacts } = require('../src/facts');
   const s = S();
   const base = { meta: {}, stage: 'qualifying' };
@@ -49,60 +49,60 @@ test('applyFacts rejects hallucinated budgets and keeps explicit ones', () => {
   assert.strictEqual(regexWins.patch.budget_amount, 800000);
 });
 
-test('formatMoney', () => {
+test('formatMoney', async () => {
   assert.strictEqual(formatMoney(500000), '₹5L');
   assert.strictEqual(formatMoney(12000000), '₹1.2Cr');
   assert.strictEqual(formatMoney(null), 'unknown');
 });
 
-test('below the minimum budget disqualifies immediately, even mid-conversation', () => {
+test('below the minimum budget disqualifies immediately, even mid-conversation', async () => {
   const r = evaluate(lead({ budget_amount: 200000 }), S());
   assert.strictEqual(r.stage, 'disqualified');
   assert.match(r.reason, /below/);
 });
 
-test('exactly the minimum qualifies on budget', () => {
+test('exactly the minimum qualifies on budget', async () => {
   const r = evaluate(lead({ budget_amount: 500000, project_type: 'Full home', city: 'Pune', timeline_months: 1 }), S());
   assert.strictEqual(r.stage, 'active');
 });
 
-test('borderline band sends near-miss budgets to nurture, not disqualified', () => {
+test('borderline band sends near-miss budgets to nurture, not disqualified', async () => {
   const s = S();
   s.qualification.borderline_pct = 10;
   assert.strictEqual(evaluate(lead({ budget_amount: 460000 }), s).stage, 'nurture');
   assert.strictEqual(evaluate(lead({ budget_amount: 400000 }), s).stage, 'disqualified');
 });
 
-test('qualified budget but far timeline is nurtured', () => {
+test('qualified budget but far timeline is nurtured', async () => {
   const r = evaluate(lead({ budget_amount: 900000, project_type: 'Office', city: 'Pune', timeline_months: 8, timeline_text: 'next year' }), S());
   assert.strictEqual(r.stage, 'nurture');
 });
 
-test('missing fields keep the lead qualifying and report the next field', () => {
+test('missing fields keep the lead qualifying and report the next field', async () => {
   const r = evaluate(lead({ project_type: 'Full home' }), S());
   assert.strictEqual(r.stage, 'qualifying');
   assert.strictEqual(r.nextField, 'city');
 });
 
-test('declined budget after other fields are done goes to nurture', () => {
+test('declined budget after other fields are done goes to nurture', async () => {
   const l = lead({ project_type: 'Full home', city: 'Pune', timeline_months: 2, meta: { declined: { budget: true } } });
   assert.strictEqual(evaluate(l, S()).stage, 'nurture');
 });
 
-test('human request and manual lock win', () => {
+test('human request and manual lock win', async () => {
   assert.strictEqual(evaluate(lead({ meta: { flags: { wants_human: true } }, budget_amount: 100 }), S()).stage, 'human');
   const locked = evaluate(lead({ stage: 'active', stage_locked: 1, stage_reason: 'Manual', budget_amount: 100 }), S());
   assert.strictEqual(locked.stage, 'active');
 });
 
-test('service area check', () => {
+test('service area check', async () => {
   const s = S();
   s.qualification.service_cities = ['Pune', 'Mumbai'];
   assert.strictEqual(evaluate(lead({ city: 'Dubai' }), s).stage, 'disqualified');
   assert.notStrictEqual(evaluate(lead({ city: 'Kharadi, Pune' }), s).stage, 'disqualified');
 });
 
-test('raising the minimum re-categorises previously active leads', () => {
+test('raising the minimum re-categorises previously active leads', async () => {
   const l = lead({ budget_amount: 700000, project_type: 'Full home', city: 'Pune', timeline_months: 1 });
   const s = S();
   assert.strictEqual(evaluate(l, s).stage, 'active');
@@ -110,7 +110,7 @@ test('raising the minimum re-categorises previously active leads', () => {
   assert.strictEqual(evaluate(l, s).stage, 'disqualified');
 });
 
-test('designer matching prefers specialty and city, balances load', () => {
+test('designer matching prefers specialty and city, balances load', async () => {
   const ds = [
     { id: 1, name: 'A', active: 1, specialties: 'Office', cities: 'Pune', min_budget: 0 },
     { id: 2, name: 'B', active: 1, specialties: 'Full home', cities: 'Pune', min_budget: 0 },

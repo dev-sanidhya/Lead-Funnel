@@ -18,9 +18,12 @@ const SEED_DESIGNERS = [
   { name: 'Meera Iyer', title: 'Renovation Specialist', specialties: 'Renovation, Other', cities: '', bio: 'Renovations and design-only consultations.' },
 ];
 
-function createApp(config, { store, llmOverride, fetchImpl, debounceMs, log = console, seed = true } = {}) {
-  store = store || new Store(config.dbPath);
+// Builds the whole object graph. Storage is chosen by config: DATABASE_URL (Postgres) in production,
+// a SQLite file locally, or a store passed in by tests. migrate:false skips the schema step on serverless cold starts.
+async function createApp(config, { store, llmOverride, fetchImpl, debounceMs, log = console, seed = true, migrate = true } = {}) {
+  store = store || await Store.open({ url: config.databaseUrl, file: config.dbPath, migrate });
   const settings = new Settings(store);
+  await settings.refresh();
   const llm = new Llm(config.llm, { fetchImpl });
   if (llmOverride) llm.override = llmOverride;
   const agent = new Agent({ llm });
@@ -33,9 +36,9 @@ function createApp(config, { store, llmOverride, fetchImpl, debounceMs, log = co
   engine.transports.telegram = telegram.transport;
   const instagram = new Instagram({ cfg: config.instagram, engine, store, config, log, fetchImpl });
   engine.transports.instagram = instagram.transport;
-  const scheduler = new Scheduler({ engine, store, settings, log });
+  const scheduler = new Scheduler({ engine, store, settings, instagram, log });
   const simulator = new Simulator({ engine, store, settings, llm, log });
-  if (seed && !store.listDesigners().length) for (const d of SEED_DESIGNERS) store.saveDesigner(d);
+  if (seed && !(await store.listDesigners()).length) for (const d of SEED_DESIGNERS) await store.saveDesigner(d);
   return { config, store, settings, llm, agent, engine, telegram, instagram, scheduler, simulator };
 }
 

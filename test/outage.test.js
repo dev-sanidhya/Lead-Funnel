@@ -10,10 +10,10 @@ const config = require('../src/config');
 const silent = { log() {}, warn() {}, error() {} };
 const settle = async (app, id) => { await app.engine.idle(id); await new Promise((r) => setTimeout(r, 25)); await app.engine.idle(id); };
 
-function downApp() {
+async function downApp() {
   const sent = [];
-  const app = createApp({ ...config, telegramToken: '' }, {
-    store: new Store(':memory:'), debounceMs: 0, log: silent,
+  const app = await createApp({ ...config, telegramToken: '' }, {
+    store: await Store.open({ file: ':memory:' }), debounceMs: 0, log: silent,
     llmOverride: async () => { throw new Error('LLM 429: you have used up your daily free allocation'); },
   });
   app.engine.transports.instagram = { send: async (lead, text) => { sent.push(text); }, typing: async () => {}, sendRaw: async () => {} };
@@ -21,22 +21,22 @@ function downApp() {
 }
 
 test('REAL CHAT with the AI completely down: answers are understood, no question repeats, the owner is alerted', async () => {
-  const { app, sent } = downApp();
-  const lead = app.store.createLead({ channel: 'instagram', chat_id: 'ig:900', name: 'Sanidhya', source: 'instagram', meta: {} });
+  const { app, sent } = await downApp();
+  const lead = await app.store.createLead({ channel: 'instagram', chat_id: 'ig:900', name: 'Sanidhya', source: 'instagram', meta: {} });
   let n = 0;
-  const say = async (t) => { app.engine.receive({ channel: 'instagram', chatId: 'ig:900', text: t, externalId: `m${++n}` }); await settle(app, lead.id); };
+  const say = async (t) => { await app.engine.receive({ channel: 'instagram', chatId: 'ig:900', text: t, externalId: `m${++n}` }); await settle(app, lead.id); };
 
   await say('hi');
   const q1 = sent[sent.length - 1];
   await say('a full homw');                       // the exact typo from the real chat
-  assert.strictEqual(app.store.getLead(lead.id).project_type, 'Full home');
+  assert.strictEqual((await app.store.getLead(lead.id)).project_type, 'Full home');
   await say('Delhi');
-  assert.strictEqual(app.store.getLead(lead.id).city, 'Delhi');
+  assert.strictEqual((await app.store.getLead(lead.id)).city, 'Delhi');
   const questions = sent.filter((s) => /\?/.test(s));
   assert.strictEqual(new Set(questions).size, questions.length, 'never the same question twice');
   assert.notStrictEqual(sent[sent.length - 1], q1);
 
-  const l = app.store.getLead(lead.id);
+  const l = await app.store.getLead(lead.id);
   assert.ok(l.meta.fu.ai_failed_at, 'the failure is recorded');
   const items = attentionFor(l, app.settings.get());
   assert.strictEqual(items[0].kind, 'ai_down');
@@ -44,11 +44,11 @@ test('REAL CHAT with the AI completely down: answers are understood, no question
 });
 
 test('the long message the form writes is read in full even with no AI', async () => {
-  const { app } = downApp();
-  const lead = app.store.createLead({ channel: 'instagram', chat_id: 'ig:901', name: 'Sanidhya', source: 'instagram', meta: {} });
-  app.engine.receive({ channel: 'instagram', chatId: 'ig:901', externalId: 'f1', text: "Hi! I'm Sanidhya. I'd like help with full home interiors, bedrooms and bathrooms for my 2BHK apartment in Rohini, Delhi. My budget is around ₹10 to 20 lakh. I'd like to get started within a month. Afternoon is the best time to reach me. I like Premium interior designing." });
+  const { app } = await downApp();
+  const lead = await app.store.createLead({ channel: 'instagram', chat_id: 'ig:901', name: 'Sanidhya', source: 'instagram', meta: {} });
+  await app.engine.receive({ channel: 'instagram', chatId: 'ig:901', externalId: 'f1', text: "Hi! I'm Sanidhya. I'd like help with full home interiors, bedrooms and bathrooms for my 2BHK apartment in Rohini, Delhi. My budget is around ₹10 to 20 lakh. I'd like to get started within a month. Afternoon is the best time to reach me. I like Premium interior designing." });
   await settle(app, lead.id);
-  const l = app.store.getLead(lead.id);
+  const l = await app.store.getLead(lead.id);
   assert.strictEqual(l.project_type, 'Full home');
   assert.strictEqual(l.city, 'Rohini, Delhi');
   assert.strictEqual(l.budget_amount, 2000000);

@@ -47,15 +47,22 @@ class Instagram {
     this.status = { enabled: !!cfg.accessToken, connected: false, lastWebhookAt: null, lastError: null, webhookSigned: !!cfg.appSecret };
   }
 
-  get enabled() { return !!this.token; }
-  // A refreshed token (stored by refreshToken) wins over the one in .env.
-  get token() { return this.store.kvGet('ig_token', null) || this.cfg.accessToken; }
+  get enabled() { return !!(this.cfg.accessToken || this.storedToken); }
+  // A refreshed token (stored by refreshToken, shared through the database) wins over the one in the environment.
+  get token() { return this.storedToken || this.cfg.accessToken; }
+  async loadToken({ maxAgeMs = 60000 } = {}) {
+    if (this.tokenLoadedAt && Date.now() - this.tokenLoadedAt < maxAgeMs) return this.token;
+    this.storedToken = await this.store.kvGet('ig_token', null);
+    this.tokenLoadedAt = Date.now();
+    return this.token;
+  }
   get handle() { return (this.me && this.me.username) || this.cfg.handle || null; }
   get base() { return `https://graph.instagram.com/${this.cfg.apiVersion}`; }
   chatLink(ref) { return this.handle ? `https://ig.me/m/${this.handle}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}` : null; }
 
   // ---------- Graph API ----------
   async api(method, path, { body, query } = {}, { retries = 3 } = {}) {
+    await this.loadToken();
     if (!this.token) throw new InstagramError('Instagram is not configured', { permanent: true });
     const qs = query ? `?${new URLSearchParams(query)}` : '';
     let lastErr;
@@ -109,13 +116,15 @@ class Instagram {
 
   // Long-lived tokens last 60 days and can be refreshed once they are 24h old.
   async refreshToken({ force = false } = {}) {
-    const info = this.store.kvGet('ig_token_info', {});
+    await this.loadToken({ maxAgeMs: 0 });
+    const info = await this.store.kvGet('ig_token_info', {});
     if (!force && info.refreshedAt && Date.now() - info.refreshedAt < 7 * 24 * 3600 * 1000) return { skipped: true };
     const res = await this.fetch(`https://graph.instagram.com/refresh_access_token?${new URLSearchParams({ grant_type: 'ig_refresh_token', access_token: this.token })}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.access_token) throw new InstagramError((data.error && data.error.message) || 'Token refresh failed', { permanent: true });
-    this.store.kvSet('ig_token', data.access_token);
-    this.store.kvSet('ig_token_info', { refreshedAt: Date.now(), expiresAt: Date.now() + (data.expires_in || 5184000) * 1000 });
+    await this.store.kvSet('ig_token', data.access_token);
+    this.storedToken = data.access_token;
+    await this.store.kvSet('ig_token_info', { refreshedAt: Date.now(), expiresAt: Date.now() + (data.expires_in || 5184000) * 1000 });
     return { refreshed: true, expires_in: data.expires_in };
   }
 
@@ -203,7 +212,7 @@ class Instagram {
     const ref = (ev.referral && ev.referral.ref) || (ev.postback && ev.postback.referral && ev.postback.referral.ref) || (ev.message && ev.message.referral && ev.message.referral.ref) || null;
 
     let profile = {};
-    const known = this.store.getLeadByChat(chatId);
+    const known = await this.store.getLeadByChat(chatId);
     if (!known) profile = await this.profile(senderId);
     const prof = { first_name: (profile.name || '').split(/\s+/)[0] || null, username: profile.username || null };
 
@@ -213,19 +222,19 @@ class Instagram {
       if (ev.message.is_echo) return; // messages sent from our own account/app
       const text = typeof ev.message.text === 'string' ? ev.message.text.trim() : '';
       if (!text) {
-        const lead = this.store.getLeadByChat(chatId) || this.engine.bindChat(chatId, prof, { channel: 'instagram', source: 'instagram' }).lead;
-        try { this.store.addMessage({ lead_id: lead.id, direction: 'in', role: 'user', text: '[sent a non-text message]', ext_id: ev.message.mid || null, processed: true }); } catch { return; }
-        this.store.updateLead(lead.id, { last_inbound_at: Date.now() });
+        const lead = (await this.store.getLeadByChat(chatId)) || (await this.engine.bindChat(chatId, prof, { channel: 'instagram', source: 'instagram' })).lead;
+        try { await this.store.addMessage({ lead_id: lead.id, direction: 'in', role: 'user', text: '[sent a non-text message]', ext_id: ev.message.mid || null, processed: true }); } catch { return; }
+        await this.store.updateLead(lead.id, { last_inbound_at: Date.now() });
         await this.engine.transportFor(lead).send(lead, 'Thanks! I can only read text messages for now. Could you type that out for me?', { role: 'assistant' }).catch(() => {});
         return;
       }
-      this.engine.receive({ channel: 'instagram', chatId, text, profile: prof, externalId: ev.message.mid || null, token: ref });
+      await this.engine.receive({ channel: 'instagram', chatId, text, profile: prof, externalId: ev.message.mid || null, token: ref });
       return;
     }
     if (ev.postback) {
       // Ice breaker taps arrive as postbacks; treat the tapped question as the customer's message.
       const text = String(ev.postback.title || ev.postback.payload || '').trim();
-      if (text) this.engine.receive({ channel: 'instagram', chatId, text, profile: prof, externalId: ev.postback.mid || null, token: ref });
+      if (text) await this.engine.receive({ channel: 'instagram', chatId, text, profile: prof, externalId: ev.postback.mid || null, token: ref });
     }
   }
 }

@@ -9,22 +9,24 @@ const { evaluate } = require('../src/qualify');
 const S = () => sanitize(merge(DEFAULTS, {}));
 const NOW = Date.now();
 
-test('the detailed form maps onto lead fields (scope, property, city, budget, timing)', () => {
+test('the detailed form maps onto lead fields (scope, property, city, budget, timing)', async () => {
+  const s = S();
+  s.qualification.project_types = ['Influencer marketing', 'PR and media', 'Celebrity gifting', 'Brand launch', 'Social media', 'Other'];
   const m = mapIntake({
-    scope: ['Modular kitchen', 'Wardrobes and storage'], property_type: 'Apartment', size: '3 BHK', sqft: '1,450',
-    city: 'Pune', locality: 'Kharadi', budget: '₹5 to 10 lakh', timeline: 'In 1 to 3 months', contact_pref: 'Evening', notes: ' Light woods ',
-  }, S());
-  assert.strictEqual(m.project_type, 'Modular kitchen');
-  assert.strictEqual(m.scope, 'modular kitchen, wardrobes and storage');
-  assert.strictEqual(m.property, '3BHK apartment, 1450 sq ft');
-  assert.strictEqual(m.city, 'Kharadi, Pune');
+    scope: ['Influencer marketing', 'Creator seeding and gifting'], property_type: 'Beauty or wellness', size: 'Just launching',
+    city: 'Mumbai', locality: 'Bandra', budget: '₹5 to 10 lakh', timeline: 'In 1 to 3 months', contact_pref: 'Evening', notes: ' Light woods ',
+  }, s);
+  assert.strictEqual(m.project_type, 'Influencer marketing');
+  assert.strictEqual(m.scope, 'influencer marketing, creator seeding and gifting');
+  assert.strictEqual(m.property, 'Just launching, beauty or wellness');
+  assert.strictEqual(m.city, 'Bandra, Mumbai');
   assert.strictEqual(m.budget_amount, 1000000);
   assert.strictEqual(m.timeline_months, 3);
   assert.strictEqual(m.contact_pref, 'evening');
   assert.strictEqual(m.notes, 'Light woods');
 });
 
-test('"Not sure" budget leaves the budget unknown so the assistant asks; low ranges still hit the bar', () => {
+test('"Not sure" budget leaves the budget unknown so the assistant asks; low ranges still hit the bar', async () => {
   const s = S();
   const unsure = mapIntake({ scope: ['Full home interiors'], budget: 'Not sure yet' }, s);
   assert.strictEqual(unsure.budget_amount, null);
@@ -35,14 +37,14 @@ test('"Not sure" budget leaves the budget unknown so the assistant asks; low ran
   assert.ok(TIMELINE_OPTIONS.some((t) => t.months === 12), 'a "just exploring" option exists and is treated as far away');
 });
 
-test('unknown or hostile form values are ignored, not stored', () => {
+test('unknown or hostile form values are ignored, not stored', async () => {
   const m = mapIntake({ scope: ['<script>'], budget: 'one billion', timeline: 'never', property_type: 'x'.repeat(500), city: 'Pune' }, S());
   assert.strictEqual(m.budget_amount, null);
   assert.strictEqual(m.timeline_months, null);
   assert.ok(m.property.length <= 80 + 20);
 });
 
-test('every lead gets a plain next step', () => {
+test('every lead gets a plain next step', async () => {
   const s = S();
   const base = { meta: {}, stage: 'active', designer: 'Priya', qualified_at: NOW - 3600000 };
   assert.match(nextStepFor({ ...base, phone: null }, s, NOW).text, /phone number/i);
@@ -57,7 +59,7 @@ test('every lead gets a plain next step', () => {
   assert.match(nextStepFor({ meta: {}, stage: 'new', chat_id: null }, s, NOW).text, /open the chat/i);
 });
 
-test('the brief reads naturally from form answers', () => {
+test('the brief reads naturally from form answers', async () => {
   const s = S();
   const b = briefFor({ meta: {}, scope: 'modular kitchen', property: '3BHK apartment', city: 'Pune', budget_amount: 1000000, timeline_text: 'in 1 to 3 months', phone: '98765' }, s, NOW);
   assert.match(b, /Wants modular kitchen for a 3BHK apartment in Pune/);
@@ -65,7 +67,7 @@ test('the brief reads naturally from form answers', () => {
   assert.doesNotMatch(b, /want to start we/i);
 });
 
-test('after the call is marked done, the next step stops asking for a call time', () => {
+test('after the call is marked done, the next step stops asking for a call time', async () => {
   const done = nextStepFor({ stage: 'active', phone: '98765', callback_at: NOW - 3600000, callback_status: 'done', callback_text: 'today 11 am', notes: 'Site visit booked for Saturday.', meta: { fu: { done_at: NOW - 1800000 } }, channel: 'instagram', last_inbound_at: NOW }, S(), NOW);
   assert.match(done.text, /^Call done\. Site visit booked/);
   assert.strictEqual(done.tone, 'idle');

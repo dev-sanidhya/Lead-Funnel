@@ -51,9 +51,9 @@ function mapIntake(body, settings) {
   const size = clean(body.size, 40);
   const sqft = clean(body.sqft, 12).replace(/[^\d]/g, '');
   const bits = [];
-  if (size && size !== 'Not applicable') bits.push(size.replace(' ', ''));
+  if (size && size !== 'Not applicable') bits.push(/^\d+(\.\d+)? ?BHK$/i.test(size) ? size.replace(' ', '') : size);
   if (ptype) bits.push(ptype.toLowerCase());
-  const property = [bits.join(' '), sqft ? `${sqft} sq ft` : ''].filter(Boolean).join(', ') || null;
+  const property = [bits.join(/BHK/i.test(bits[0] || '') ? ' ' : ', '), sqft ? `${sqft} sq ft` : ''].filter(Boolean).join(', ') || null;
 
   const locality = clean(body.locality, 60);
   const city = clean(body.city, 60);

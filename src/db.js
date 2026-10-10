@@ -1,62 +1,76 @@
 'use strict';
+// Storage. One async interface, two drivers: Postgres (production on Vercel,
+// DATABASE_URL) and SQLite (local development and tests, a file or ':memory:').
+// Every method returns a promise, so no caller cares which one is underneath.
+
 const fs = require('node:fs');
 const path = require('node:path');
-const { DatabaseSync } = require('node:sqlite');
 
-const SCHEMA = `
+// ---------- schema ----------
+// Written once in a neutral form; the driver swaps the few dialect differences.
+const TABLES = (d) => `
 CREATE TABLE IF NOT EXISTS leads (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id ${d.pk},
   chat_id TEXT UNIQUE,
   channel TEXT NOT NULL DEFAULT 'telegram',
   tg_username TEXT,
   name TEXT, phone TEXT, email TEXT,
   source TEXT, campaign TEXT,
   project_type TEXT, city TEXT,
-  budget_amount REAL, budget_text TEXT,
-  timeline_months REAL, timeline_text TEXT,
+  budget_amount ${d.real}, budget_text TEXT,
+  timeline_months ${d.real}, timeline_text TEXT,
   notes TEXT,
   stage TEXT NOT NULL DEFAULT 'new',
   stage_reason TEXT,
-  stage_locked INTEGER NOT NULL DEFAULT 0,
-  score INTEGER NOT NULL DEFAULT 0,
-  designer_id INTEGER,
-  ai_paused INTEGER NOT NULL DEFAULT 0,
-  opted_out INTEGER NOT NULL DEFAULT 0,
+  stage_locked ${d.int} NOT NULL DEFAULT 0,
+  score ${d.int} NOT NULL DEFAULT 0,
+  designer_id ${d.big},
+  ai_paused ${d.int} NOT NULL DEFAULT 0,
+  opted_out ${d.int} NOT NULL DEFAULT 0,
   summary TEXT NOT NULL DEFAULT '',
-  summary_upto INTEGER NOT NULL DEFAULT 0,
+  summary_upto ${d.big} NOT NULL DEFAULT 0,
   meta TEXT NOT NULL DEFAULT '{}',
   start_token TEXT UNIQUE,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  last_inbound_at INTEGER,
-  last_outbound_at INTEGER,
-  qualified_at INTEGER
+  created_at ${d.big} NOT NULL,
+  updated_at ${d.big} NOT NULL,
+  last_inbound_at ${d.big},
+  last_outbound_at ${d.big},
+  qualified_at ${d.big},
+  callback_at ${d.big}, callback_text TEXT, callback_status TEXT, callback_kind TEXT,
+  property TEXT, scope TEXT, style TEXT, contact_pref TEXT,
+  fu_step ${d.int} NOT NULL DEFAULT 0,
+  reminded_at ${d.big},
+  lock_until ${d.big}
 );
 CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage);
 CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
+CREATE INDEX IF NOT EXISTS idx_leads_updated ON leads(updated_at);
 
 CREATE TABLE IF NOT EXISTS messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  lead_id INTEGER NOT NULL,
+  id ${d.pk},
+  lead_id ${d.big} NOT NULL,
   direction TEXT NOT NULL,
   role TEXT NOT NULL,
   text TEXT NOT NULL,
-  tg_update_id INTEGER UNIQUE,
+  tg_update_id ${d.big} UNIQUE,
+  ext_id TEXT,
   status TEXT NOT NULL DEFAULT 'received',
-  processed INTEGER NOT NULL DEFAULT 0,
-  attempts INTEGER NOT NULL DEFAULT 0,
+  processed ${d.int} NOT NULL DEFAULT 0,
+  attempts ${d.int} NOT NULL DEFAULT 0,
   error TEXT,
-  created_at INTEGER NOT NULL
+  claimed_at ${d.big},
+  created_at ${d.big} NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id, id);
 CREATE INDEX IF NOT EXISTS idx_messages_pending ON messages(status, processed);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_ext ON messages(ext_id);
 
 CREATE TABLE IF NOT EXISTS events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  lead_id INTEGER,
+  id ${d.pk},
+  lead_id ${d.big},
   type TEXT NOT NULL,
   data TEXT NOT NULL DEFAULT '{}',
-  created_at INTEGER NOT NULL
+  created_at ${d.big} NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_lead ON events(lead_id, id);
 
@@ -64,30 +78,33 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS designers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id ${d.pk},
   name TEXT NOT NULL,
   title TEXT,
   phone TEXT,
   telegram_chat_id TEXT,
   specialties TEXT NOT NULL DEFAULT '',
   cities TEXT NOT NULL DEFAULT '',
-  min_budget REAL NOT NULL DEFAULT 0,
+  min_budget ${d.real} NOT NULL DEFAULT 0,
   bio TEXT,
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL
+  active ${d.int} NOT NULL DEFAULT 1,
+  created_at ${d.big} NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS webhook_outbox (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id ${d.pk},
   event TEXT NOT NULL,
   payload TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  attempts INTEGER NOT NULL DEFAULT 0,
-  next_at INTEGER NOT NULL,
+  attempts ${d.int} NOT NULL DEFAULT 0,
+  next_at ${d.big} NOT NULL,
   last_error TEXT,
-  created_at INTEGER NOT NULL
+  created_at ${d.big} NOT NULL
 );
 `;
+
+const SQLITE_DIALECT = { pk: 'INTEGER PRIMARY KEY AUTOINCREMENT', int: 'INTEGER', big: 'INTEGER', real: 'REAL' };
+const PG_DIALECT = { pk: 'BIGSERIAL PRIMARY KEY', int: 'INTEGER', big: 'BIGINT', real: 'DOUBLE PRECISION' };
 
 const LEAD_COLUMNS = new Set([
   'chat_id', 'channel', 'tg_username', 'name', 'phone', 'email', 'source', 'campaign',
@@ -96,60 +113,157 @@ const LEAD_COLUMNS = new Set([
   'opted_out', 'summary', 'summary_upto', 'meta', 'start_token', 'last_inbound_at',
   'last_outbound_at', 'qualified_at',
   'callback_at', 'callback_text', 'callback_status', 'callback_kind', 'property', 'scope', 'style', 'contact_pref',
+  'fu_step', 'reminded_at', 'lock_until',
 ]);
 
 const now = () => Date.now();
+function safeJson(s) { try { return JSON.parse(s); } catch { return {}; } }
+function normalizePhone(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  if (d.length < 7) return '';
+  return d.slice(-10); // compare on the last 10 digits so +91 / 0 prefixes match
+}
 
-class Store {
+// ---------- drivers ----------
+// A driver exposes: run(sql,...p) -> {changes}, insert(sql,...p) -> id, get, all, exec,
+// and withTx(fn) which hands fn a driver bound to one transaction.
+class SqliteDriver {
   constructor(file) {
+    const { DatabaseSync } = require('node:sqlite');
     if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
     this.db = new DatabaseSync(file);
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;');
-    this.db.exec(SCHEMA);
-    this.migrate();
+    this.kind = 'sqlite';
+    this.like = 'LIKE';
+    this.gate = Promise.resolve();
   }
-
-  // Additive migrations for databases created by earlier versions.
-  migrate() {
-    const cols = this.all('PRAGMA table_info(messages)').map((c) => c.name);
-    if (!cols.includes('ext_id')) this.db.exec('ALTER TABLE messages ADD COLUMN ext_id TEXT');
-    const lcols = this.all('PRAGMA table_info(leads)').map((c) => c.name);
-    const add = { callback_at: 'INTEGER', callback_text: 'TEXT', callback_status: 'TEXT', callback_kind: 'TEXT', property: 'TEXT', scope: 'TEXT', style: 'TEXT', contact_pref: 'TEXT' };
-    for (const [c, type] of Object.entries(add)) if (!lcols.includes(c)) this.db.exec(`ALTER TABLE leads ADD COLUMN ${c} ${type}`);
-    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_ext ON messages(ext_id)');
-  }
-
-  tx(fn) {
-    this.db.exec('BEGIN IMMEDIATE');
+  async exec(sql) { this.db.exec(sql); }
+  async run(sql, ...p) { const r = this.db.prepare(sql).run(...p); return { changes: Number(r.changes) }; }
+  async insert(sql, ...p) { const r = this.db.prepare(sql).run(...p); return Number(r.lastInsertRowid); }
+  async get(sql, ...p) { return this.db.prepare(sql).get(...p); }
+  async all(sql, ...p) { return this.db.prepare(sql).all(...p); }
+  async withTx(fn) {
+    // One transaction at a time on the single connection.
+    const prev = this.gate;
+    let release;
+    this.gate = new Promise((r) => { release = r; });
+    await prev;
     try {
-      const out = fn();
-      this.db.exec('COMMIT');
+      this.db.exec('BEGIN IMMEDIATE');
+      try {
+        const out = await fn(this);
+        this.db.exec('COMMIT');
+        return out;
+      } catch (e) {
+        try { this.db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+        throw e;
+      }
+    } finally { release(); }
+  }
+  async tableColumns(table) { return this.db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name); }
+  async close() { this.db.close(); }
+}
+
+class PgDriver {
+  constructor(urlOrPool, { pool } = {}) {
+    const { Pool, types } = require('pg');
+    types.setTypeParser(20, (v) => Number(v)); // bigint columns hold epoch milliseconds and counts: always numbers
+    this.kind = 'pg';
+    this.like = 'ILIKE';
+    if (pool) { this.pool = pool; return; }
+    this.pool = new Pool({
+      connectionString: urlOrPool,
+      max: Number(process.env.PG_POOL_MAX || 4),
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 8000,
+      ssl: /localhost|127\.0\.0\.1/.test(urlOrPool) ? false : { rejectUnauthorized: false },
+    });
+    this.pool.on('error', () => { /* an idle connection dropped; the next query opens a new one */ });
+  }
+  static text(sql) { let i = 0; return sql.replace(/\?/g, () => `$${++i}`); }
+  async exec(sql) { await this.pool.query(sql); }
+  async run(sql, ...p) { const r = await this.pool.query(PgDriver.text(sql), p); return { changes: r.rowCount }; }
+  async insert(sql, ...p) { const r = await this.pool.query(`${PgDriver.text(sql)} RETURNING id`, p); return Number(r.rows[0].id); }
+  async get(sql, ...p) { const r = await this.pool.query(PgDriver.text(sql), p); return r.rows[0]; }
+  async all(sql, ...p) { const r = await this.pool.query(PgDriver.text(sql), p); return r.rows; }
+  async withTx(fn) {
+    const client = await this.pool.connect();
+    const bound = new PgTxDriver(client);
+    try {
+      await client.query('BEGIN');
+      const out = await fn(bound);
+      await client.query('COMMIT');
       return out;
     } catch (e) {
-      try { this.db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      try { await client.query('ROLLBACK'); } catch { /* connection already gone */ }
       throw e;
-    }
+    } finally { client.release(); }
+  }
+  async tableColumns(table) {
+    const r = await this.pool.query('SELECT column_name FROM information_schema.columns WHERE table_name=$1', [table]);
+    return r.rows.map((c) => c.column_name);
+  }
+  async close() { await this.pool.end(); }
+}
+
+class PgTxDriver extends PgDriver {
+  constructor(client) { super(null, { pool: client }); this.kind = 'pg'; this.like = 'ILIKE'; }
+  async withTx(fn) { return fn(this); } // already inside a transaction
+}
+
+// ---------- store ----------
+class Store {
+  constructor(driver) { this.d = driver; }
+
+  // Store.open({ url }) for Postgres, Store.open({ file }) for SQLite. Pass migrate:false in production.
+  static async open({ url, file, migrate = true } = {}) {
+    const store = new Store(url ? new PgDriver(url) : new SqliteDriver(file || ':memory:'));
+    if (migrate) await store.migrate();
+    return store;
   }
 
-  run(sql, ...p) { return this.db.prepare(sql).run(...p); }
-  get(sql, ...p) { return this.db.prepare(sql).get(...p); }
-  all(sql, ...p) { return this.db.prepare(sql).all(...p); }
+  get kind() { return this.d.kind; }
+
+  async migrate() {
+    const dialect = this.d.kind === 'pg' ? PG_DIALECT : SQLITE_DIALECT;
+    const statements = TABLES(dialect).split(';').map((s) => s.trim()).filter(Boolean);
+    for (const s of statements) await this.d.exec(s);
+    // Additive upgrades for databases created by earlier versions.
+    const cols = await this.d.tableColumns('leads');
+    const add = {
+      callback_at: dialect.big, callback_text: 'TEXT', callback_status: 'TEXT', callback_kind: 'TEXT', property: 'TEXT', scope: 'TEXT', style: 'TEXT', contact_pref: 'TEXT',
+      fu_step: `${dialect.int} NOT NULL DEFAULT 0`, reminded_at: dialect.big, lock_until: dialect.big,
+    };
+    for (const [c, type] of Object.entries(add)) if (!cols.includes(c)) await this.d.exec(`ALTER TABLE leads ADD COLUMN ${c} ${type}`);
+    const mcols = await this.d.tableColumns('messages');
+    if (!mcols.includes('ext_id')) await this.d.exec('ALTER TABLE messages ADD COLUMN ext_id TEXT');
+    if (!mcols.includes('claimed_at')) await this.d.exec(`ALTER TABLE messages ADD COLUMN claimed_at ${dialect.big}`);
+    await this.d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_ext ON messages(ext_id)');
+  }
+
+  // Runs fn(txStore) inside one transaction. Use the store handed to fn, not this one.
+  tx(fn) { return this.d.withTx((driver) => fn(new Store(driver))); }
+
+  run(sql, ...p) { return this.d.run(sql, ...p); }
+  get(sql, ...p) { return this.d.get(sql, ...p); }
+  all(sql, ...p) { return this.d.all(sql, ...p); }
+  isDuplicate(e) { return /UNIQUE|duplicate key/i.test(String(e && e.message)) || (e && e.code === '23505'); }
 
   // ---- kv / settings ----
-  kvGet(key, fallback = null) {
-    const r = this.get('SELECT value FROM kv WHERE key=?', key);
+  async kvGet(key, fallback = null) {
+    const r = await this.get('SELECT value FROM kv WHERE key=?', key);
     return r ? JSON.parse(r.value) : fallback;
   }
-  kvSet(key, value) {
-    this.run('INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, JSON.stringify(value));
+  async kvSet(key, value) {
+    await this.run('INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, JSON.stringify(value));
   }
-  settingsRaw() {
+  async settingsRaw() {
     const out = {};
-    for (const r of this.all('SELECT key,value FROM settings')) out[r.key] = JSON.parse(r.value);
+    for (const r of await this.all('SELECT key,value FROM settings')) out[r.key] = JSON.parse(r.value);
     return out;
   }
-  settingsSetRaw(key, value) {
-    this.run('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, JSON.stringify(value));
+  async settingsSetRaw(key, value) {
+    await this.run('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, JSON.stringify(value));
   }
 
   // ---- leads ----
@@ -159,20 +273,20 @@ class Store {
     try { meta = JSON.parse(row.meta || '{}'); } catch { /* corrupt meta resets */ }
     return { ...row, meta };
   }
-  createLead(fields = {}) {
+  async createLead(fields = {}) {
     const t = now();
     const data = { channel: 'telegram', stage: 'new', ...fields };
     const meta = JSON.stringify(data.meta || {});
     const cols = Object.keys(data).filter((k) => LEAD_COLUMNS.has(k) && k !== 'meta');
     const all = [...cols, 'meta', 'created_at', 'updated_at'];
     const sql = `INSERT INTO leads(${all.join(',')}) VALUES(${all.map(() => '?').join(',')})`;
-    const r = this.run(sql, ...cols.map((c) => data[c] ?? null), meta, t, t);
-    return this.getLead(Number(r.lastInsertRowid));
+    const id = await this.d.insert(sql, ...cols.map((c) => data[c] ?? null), meta, t, t);
+    return this.getLead(id);
   }
-  getLead(id) { return this.hydrate(this.get('SELECT * FROM leads WHERE id=?', id)); }
-  getLeadByChat(chatId) { return this.hydrate(this.get('SELECT * FROM leads WHERE chat_id=?', String(chatId))); }
-  getLeadByToken(token) { return this.hydrate(this.get('SELECT * FROM leads WHERE start_token=?', token)); }
-  updateLead(id, patch) {
+  async getLead(id) { return this.hydrate(await this.get('SELECT * FROM leads WHERE id=?', id)); }
+  async getLeadByChat(chatId) { return this.hydrate(await this.get('SELECT * FROM leads WHERE chat_id=?', String(chatId))); }
+  async getLeadByToken(token) { return this.hydrate(await this.get('SELECT * FROM leads WHERE start_token=?', token)); }
+  async updateLead(id, patch) {
     const sets = [];
     const vals = [];
     for (const [k, v] of Object.entries(patch)) {
@@ -183,91 +297,94 @@ class Store {
     if (!sets.length) return this.getLead(id);
     sets.push('updated_at=?');
     vals.push(now(), id);
-    this.run(`UPDATE leads SET ${sets.join(',')} WHERE id=?`, ...vals);
+    await this.run(`UPDATE leads SET ${sets.join(',')} WHERE id=?`, ...vals);
     return this.getLead(id);
   }
-  deleteLead(id) {
-    this.tx(() => {
-      this.run('DELETE FROM messages WHERE lead_id=?', id);
-      this.run('DELETE FROM events WHERE lead_id=?', id);
-      this.run('DELETE FROM leads WHERE id=?', id);
+  async deleteLead(id) {
+    await this.tx(async (t) => {
+      await t.run('DELETE FROM messages WHERE lead_id=?', id);
+      await t.run('DELETE FROM events WHERE lead_id=?', id);
+      await t.run('DELETE FROM leads WHERE id=?', id);
     });
   }
-  listLeads({ stage, q, channel, limit = 500 } = {}) {
+  async listLeads({ stage, q, channel, limit = 500 } = {}) {
     const where = [];
     const p = [];
     if (stage) { where.push('stage=?'); p.push(stage); }
     if (channel === 'real') where.push("channel!='sim'");
     else if (channel) { where.push('channel=?'); p.push(channel); }
     if (q) {
-      where.push('(name LIKE ? OR phone LIKE ? OR email LIKE ? OR city LIKE ? OR tg_username LIKE ?)');
+      const L = this.d.like;
+      where.push(`(name ${L} ? OR phone ${L} ? OR email ${L} ? OR city ${L} ? OR tg_username ${L} ?)`);
       const like = `%${q}%`;
       p.push(like, like, like, like, like);
     }
     const sql = `SELECT * FROM leads ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY updated_at DESC LIMIT ?`;
-    return this.all(sql, ...p, limit).map((r) => this.hydrate(r));
+    return (await this.all(sql, ...p, limit)).map((r) => this.hydrate(r));
   }
-  findLeadByPhone(phone, { unboundOnly = false } = {}) {
+  async findLeadByPhone(phone, { unboundOnly = false } = {}) {
     const digits = normalizePhone(phone);
     if (!digits) return null;
-    const rows = this.all(`SELECT * FROM leads WHERE phone IS NOT NULL ${unboundOnly ? 'AND chat_id IS NULL' : ''} ORDER BY id DESC`);
+    const rows = await this.all(`SELECT * FROM leads WHERE phone IS NOT NULL ${unboundOnly ? 'AND chat_id IS NULL' : ''} ORDER BY id DESC`);
     return this.hydrate(rows.find((r) => normalizePhone(r.phone) === digits));
   }
 
+  // Atomic per-lead lease, so two serverless instances never run a turn for the same lead at once.
+  // Returns a release function, or null when someone else holds it.
+  async lease(leadId, ttlMs = 90000) {
+    const t = now();
+    const r = await this.run('UPDATE leads SET lock_until=? WHERE id=? AND (lock_until IS NULL OR lock_until<?)', t + ttlMs, leadId, t);
+    if (!r.changes) return null;
+    const until = t + ttlMs;
+    return async () => { await this.run('UPDATE leads SET lock_until=NULL WHERE id=? AND lock_until=?', leadId, until).catch(() => {}); };
+  }
+
   // ---- messages ----
-  addMessage(m) {
-    const r = this.run(
+  async addMessage(m) {
+    return this.d.insert(
       'INSERT INTO messages(lead_id,direction,role,text,tg_update_id,ext_id,status,processed,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
       m.lead_id, m.direction, m.role, m.text, m.tg_update_id ?? null, m.ext_id ?? null,
       m.status || (m.direction === 'in' ? 'received' : 'pending'), m.processed ? 1 : 0, now(),
     );
-    return Number(r.lastInsertRowid);
   }
   getMessages(leadId, { limit = 300, afterId = 0 } = {}) {
     return this.all('SELECT * FROM messages WHERE lead_id=? AND id>? ORDER BY id ASC LIMIT ?', leadId, afterId, limit);
   }
-  recentMessages(leadId, n) {
-    return this.all('SELECT * FROM messages WHERE lead_id=? ORDER BY id DESC LIMIT ?', leadId, n).reverse();
+  async recentMessages(leadId, n) {
+    return (await this.all('SELECT * FROM messages WHERE lead_id=? ORDER BY id DESC LIMIT ?', leadId, n)).reverse();
   }
-  countMessages(leadId) { return this.get('SELECT COUNT(*) c FROM messages WHERE lead_id=?', leadId).c; }
+  async countMessages(leadId) { return Number((await this.get('SELECT COUNT(*) c FROM messages WHERE lead_id=?', leadId)).c); }
 
   // ---- events ----
-  addEvent(leadId, type, data = {}) {
-    this.run('INSERT INTO events(lead_id,type,data,created_at) VALUES(?,?,?,?)', leadId, type, JSON.stringify(data), now());
+  async addEvent(leadId, type, data = {}) {
+    await this.run('INSERT INTO events(lead_id,type,data,created_at) VALUES(?,?,?,?)', leadId, type, JSON.stringify(data), now());
   }
-  getEvents(leadId, limit = 100) {
-    return this.all('SELECT * FROM events WHERE lead_id=? ORDER BY id DESC LIMIT ?', leadId, limit)
+  async getEvents(leadId, limit = 100) {
+    return (await this.all('SELECT * FROM events WHERE lead_id=? ORDER BY id DESC LIMIT ?', leadId, limit))
       .map((e) => ({ ...e, data: safeJson(e.data) }));
   }
 
   // ---- designers ----
   listDesigners() { return this.all('SELECT * FROM designers ORDER BY active DESC, id ASC'); }
-  getDesigner(id) { return this.get('SELECT * FROM designers WHERE id=?', id) || null; }
-  saveDesigner(d) {
+  async getDesigner(id) { return (await this.get('SELECT * FROM designers WHERE id=?', id)) || null; }
+  async saveDesigner(d) {
     const f = [d.name, d.title || '', d.phone || '', d.telegram_chat_id || '', d.specialties || '', d.cities || '',
       Number(d.min_budget) || 0, d.bio || '', d.active === false || d.active === 0 ? 0 : 1];
     if (d.id) {
-      this.run('UPDATE designers SET name=?,title=?,phone=?,telegram_chat_id=?,specialties=?,cities=?,min_budget=?,bio=?,active=? WHERE id=?', ...f, d.id);
+      await this.run('UPDATE designers SET name=?,title=?,phone=?,telegram_chat_id=?,specialties=?,cities=?,min_budget=?,bio=?,active=? WHERE id=?', ...f, d.id);
       return this.getDesigner(d.id);
     }
-    const r = this.run('INSERT INTO designers(name,title,phone,telegram_chat_id,specialties,cities,min_budget,bio,active,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)', ...f, now());
-    return this.getDesigner(Number(r.lastInsertRowid));
+    const id = await this.d.insert('INSERT INTO designers(name,title,phone,telegram_chat_id,specialties,cities,min_budget,bio,active,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)', ...f, now());
+    return this.getDesigner(id);
   }
-  deleteDesigner(id) { this.run('DELETE FROM designers WHERE id=?', id); }
+  deleteDesigner(id) { return this.run('DELETE FROM designers WHERE id=?', id); }
 
   // ---- webhook outbox ----
   enqueueWebhook(event, payload) {
-    this.run('INSERT INTO webhook_outbox(event,payload,next_at,created_at) VALUES(?,?,?,?)', event, JSON.stringify(payload), now(), now());
+    return this.run('INSERT INTO webhook_outbox(event,payload,next_at,created_at) VALUES(?,?,?,?)', event, JSON.stringify(payload), now(), now());
   }
 
-  close() { this.db.close(); }
+  close() { return this.d.close(); }
 }
 
-function safeJson(s) { try { return JSON.parse(s); } catch { return {}; } }
-function normalizePhone(p) {
-  const d = String(p || '').replace(/\D/g, '');
-  if (d.length < 7) return '';
-  return d.slice(-10); // compare on the last 10 digits so +91 / 0 prefixes match
-}
-
-module.exports = { Store, normalizePhone, safeJson, now };
+module.exports = { Store, normalizePhone, safeJson, now, TABLES, SQLITE_DIALECT, PG_DIALECT };

@@ -29,6 +29,10 @@ module.exports = {
   ROOT,
   port: num(env.PORT, 3000),
   dbPath: path.resolve(ROOT, env.DB_PATH || 'data/funnel.db'),
+  // Postgres connection string (Supabase pooler). When set it replaces the local SQLite file.
+  databaseUrl: env.DATABASE_URL || '',
+  cronSecret: env.CRON_SECRET || '',
+  serverless: !!(env.VERCEL || env.SERVERLESS),
   publicUrl: (env.PUBLIC_URL || `http://localhost:${num(env.PORT, 3000)}`).replace(/\/$/, ''),
   adminPassword: env.ADMIN_PASSWORD || 'demo',
   intakeSecret: env.INTAKE_SECRET || 'change-me',

@@ -1,4 +1,6 @@
 'use strict';
+// Long-running server for local development and any always-on host. Production on Vercel
+// uses api/index.js instead (same app, request-scoped).
 const config = require('./config');
 const { createApp } = require('./app');
 const { createServer } = require('./server');
@@ -7,9 +9,10 @@ process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', e)
 process.on('uncaughtException', (e) => console.error('[uncaughtException]', e));
 
 async function main() {
-  const app = createApp(config);
+  const app = await createApp(config);
   if (config.adminPassword === 'demo') console.warn('[warn] ADMIN_PASSWORD is the default "demo". Change it before exposing this publicly.');
   if (!app.llm.enabled) console.warn('[warn] No LLM key set (LLM_API_KEY). The agent will use templated replies only.');
+  console.log(`[db] ${app.store.kind === 'pg' ? 'Postgres' : `SQLite ${config.dbPath}`}`);
 
   const server = createServer(app);
   server.listen(config.port, () => {
@@ -18,7 +21,7 @@ async function main() {
     console.log(`[server] IG webhook     ${config.publicUrl}/webhook/instagram`);
   });
 
-  const recovered = app.engine.recover();
+  const recovered = await app.engine.recover();
   if (recovered) console.log(`[engine] resuming ${recovered} unprocessed conversation(s)`);
   app.scheduler.start();
   await app.instagram.start();
@@ -34,7 +37,7 @@ async function main() {
     app.telegram.stop();
     app.scheduler.stop();
     server.close();
-    setTimeout(() => { try { app.store.close(); } catch { /* closing */ } process.exit(0); }, 400);
+    setTimeout(() => { Promise.resolve(app.store.close()).catch(() => {}).finally(() => process.exit(0)); }, 400);
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);

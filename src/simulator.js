@@ -100,20 +100,20 @@ class Simulator {
 
   async runOne(p, run, maxTurns) {
     const chatId = `sim:${crypto.randomBytes(6).toString('hex')}`;
-    const lead = this.store.createLead({
+    const lead = await this.store.createLead({
       channel: 'sim', chat_id: chatId, name: p.name,
       phone: `+91 9${Math.floor(100000000 + Math.random() * 899999999)}`,
       source: 'simulator', campaign: p.id, start_token: this.engine.newToken(),
       meta: { persona: p.id },
     });
-    this.store.addEvent(lead.id, 'lead_created', { source: 'simulator', persona: p.id });
+    await this.store.addEvent(lead.id, 'lead_created', { source: 'simulator', persona: p.id });
     run.leadId = lead.id;
     this.engine.changed('sim', lead.id);
     await this.engine.start(lead.id);
     let turns = 0;
     for (; turns < maxTurns; turns++) {
-      const msgs = this.store.recentMessages(lead.id, 14);
-      const cur = this.store.getLead(lead.id);
+      const msgs = await this.store.recentMessages(lead.id, 14);
+      const cur = await this.store.getLead(lead.id);
       const lastBot = [...msgs].reverse().find((m) => m.direction === 'out');
       if (turns > 0 && (cur.stage === 'human' || (['active', 'nurture', 'disqualified'].includes(cur.stage) && lastBot && !/\?\s*$/.test(lastBot.text)))) break;
       let text;
@@ -122,14 +122,14 @@ class Simulator {
         try { text = await this.nextUserMessage(p, msgs); } catch (e) { run.error = e.message; break; }
         if (!text || /^\[END\]/i.test(text)) break;
       }
-      this.engine.receive({ channel: 'sim', chatId, text });
+      await this.engine.receive({ channel: 'sim', chatId, text });
       await sleep(30);
       await this.engine.idle(lead.id);
       run.turns = turns + 1;
       this.engine.changed('sim', lead.id);
     }
     await this.engine.idle(lead.id);
-    const final = this.store.getLead(lead.id);
+    const final = await this.store.getLead(lead.id);
     run.stage = final.stage;
     const exp = this.expectedStage(p);
     run.expected = Array.isArray(exp) ? exp.join(' or ') : exp;
@@ -164,9 +164,9 @@ class Simulator {
     return this.state;
   }
 
-  clear() {
-    const rows = this.store.all("SELECT id FROM leads WHERE channel='sim'");
-    for (const r of rows) this.store.deleteLead(r.id);
+  async clear() {
+    const rows = await this.store.all("SELECT id FROM leads WHERE channel='sim'");
+    for (const r of rows) await this.store.deleteLead(r.id);
     this.state = { running: false, runs: [], startedAt: null, finishedAt: null };
     this.engine.changed('sim');
     return rows.length;

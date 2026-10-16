@@ -68,7 +68,7 @@ const SETTINGS = {
   },
 };
 
-(async () => {
+async function main() {
   const store = await Store.open({ url: config.databaseUrl, file: config.dbPath });
   const settings = new Settings(store);
   await settings.refresh();
@@ -76,4 +76,7 @@ const SETTINGS = {
   const s = settings.get();
   console.log(`configured: ${s.business.name} | assistant ${s.agent.name} | emojis ${s.agent.emojis} | polish ${s.agent.polish} | min budget ${s.qualification.min_budget} | timeline cut-off ${s.qualification.active_within_months} months`);
   await store.close();
-})().catch((e) => { console.error(e.message); process.exit(1); });
+}
+
+module.exports = { SETTINGS };
+if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });

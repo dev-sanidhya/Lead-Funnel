@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Interio Arty: Lead Inbox</title>
-<link rel="stylesheet" href="/crm-assets/style.css" />
+<link rel="stylesheet" href="/crm-assets/style.css?v=3" />
 <style>
   body { cursor: default; background: var(--ink); color: var(--vellum); }
   .crm-wrap { max-width: 1080px; margin: 0 auto; padding: 150px 6vw 120px; }
@@ -74,12 +74,18 @@
   }
   .action-btn:hover { background: var(--vellum); color: var(--ink); border-color: var(--vellum); }
 
-  .transcript { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 8px; }
+  .transcript { max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 8px; }
   .t-msg { font-size: 0.84rem; font-weight: 300; line-height: 1.5; padding: 8px 12px; }
   .t-msg.user { background: rgba(255,255,255,0.08); }
   .t-msg.bot { background: transparent; border: 1px solid var(--line-on-ink); }
-  .t-img { display: block; max-width: 240px; max-height: 280px; border: 1px solid var(--line-on-ink); margin-bottom: 6px; }
-  .t-cap { display: block; font-size: 0.72rem; color: rgba(255,255,255,0.45); font-style: italic; }
+  /* a photo the customer sent: shown large, whole (never cropped), click for full screen */
+  .t-img { display: block; width: 100%; max-width: 520px; height: auto; max-height: 520px; object-fit: contain; background: rgba(0,0,0,0.25); border: 1px solid var(--line-on-ink); margin-bottom: 8px; cursor: zoom-in; }
+  .t-cap { display: block; font-size: 0.8rem; line-height: 1.45; color: rgba(255,255,255,0.55); font-style: italic; }
+  .lightbox { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; background: rgba(10,10,10,0.94); cursor: zoom-out; }
+  .lightbox.show { display: flex; }
+  .lightbox img { max-width: 94vw; max-height: 90vh; object-fit: contain; box-shadow: 0 20px 80px rgba(0,0,0,0.6); }
+  .lightbox .lb-bar { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: flex-end; gap: 14px; padding: 16px 22px; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; }
+  .lightbox .lb-bar a, .lightbox .lb-bar span { color: var(--vellum); text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.4); padding-bottom: 2px; cursor: pointer; }
   .t-role { display: block; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
 
   .empty-state { text-align: center; padding: var(--sp-6) 20px; color: rgba(255,255,255,0.4); border-top: 1px solid var(--line-on-ink); }
@@ -133,6 +139,8 @@
   <div id="leadList" class="lead-list"></div>
 </div>
 
+<div class="lightbox" id="lightbox"><div class="lb-bar"><a id="lbOpen" target="_blank" rel="noopener">Open original</a><span>Close (Esc)</span></div><img id="lbImg" alt="Photo sent by the customer" /></div>
+
 <div class="toast" id="toast">New lead received</div>
 
 <div id="login" class="login-wrap" style="display:none">
@@ -145,6 +153,6 @@
   </form>
 </div>
 
-<script src="/crm-assets/crm.js"></script>
+<script src="/crm-assets/crm.js?v=3"></script>
 </body>
 </html>

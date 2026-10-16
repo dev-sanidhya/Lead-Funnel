@@ -11,6 +11,7 @@
   var filter = 'all';
   var openIds = new Set();
   var leads = [];
+  var lastSig = '';
   var seen = null; // ids already shown, so only genuinely new leads trigger the toast
 
   function timeAgo(iso) {
@@ -54,7 +55,7 @@
         if (m.image) {
           // a picture the customer sent: show it exactly as sent, with what the assistant understood from it
           var caption = String(m.content || '').replace(/^\[Photo\]\s*/, '');
-          body = '<a href="' + m.image + '" target="_blank" rel="noopener"><img class="t-img" src="' + m.image + '" alt="Photo sent by the customer" loading="lazy" /></a>' +
+          body = '<img class="t-img" data-full="' + m.image + '" src="' + m.image + '" alt="Photo sent by the customer" loading="lazy" title="Click to enlarge" />' +
             (caption ? '<span class="t-cap">' + escapeHtml(caption) + '</span>' : '');
         } else {
           body = escapeHtml(m.content);
@@ -215,8 +216,12 @@
         var ids = new Set(fresh.map(function (l) { return l.id; }));
         var added = seen ? fresh.some(function (l) { return !seen.has(l.id); }) : false;
         seen = ids;
+        // redraw only when something changed, so a lead you are reading keeps its place
+        var sig = JSON.stringify(fresh.map(function (l) { return [l.id, l.status, l.summary, l.phone, l.name, l.transcript.length]; }));
+        var changed = sig !== lastSig;
+        lastSig = sig;
         leads = fresh;
-        render();
+        if (changed) render();
         if (added) showToast();
       })
       .catch(function () { /* signed out or offline: try again on the next tick */ });
@@ -230,6 +235,22 @@
       .then(function (r) { if (!r.ok) throw new Error('Wrong password'); return load(); })
       .catch(function (x) { err.textContent = x.message; });
   });
+
+  // photos open full screen: click anywhere or press Esc to close
+  var lightbox = document.getElementById('lightbox');
+  var lbImg = document.getElementById('lbImg');
+  var lbOpen = document.getElementById('lbOpen');
+  function closeLightbox() { lightbox.classList.remove('show'); lbImg.removeAttribute('src'); }
+  listEl.addEventListener('click', function (e) {
+    var img = e.target.closest && e.target.closest('.t-img');
+    if (!img) return;
+    e.stopPropagation();
+    lbImg.src = img.getAttribute('data-full');
+    lbOpen.href = img.getAttribute('data-full');
+    lightbox.classList.add('show');
+  });
+  lightbox.addEventListener('click', function (e) { if (e.target.id !== 'lbOpen') closeLightbox(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
 
   var exportBtn = document.getElementById('exportCsv');
   if (exportBtn) exportBtn.addEventListener('click', exportCsv);

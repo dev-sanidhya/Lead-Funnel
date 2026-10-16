@@ -190,6 +190,34 @@ class Instagram {
     return got.length === expected.length && crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected));
   }
 
+  // Which other deployments need this (already signature-checked) payload: [url, ...] and the same
+  // payload without the entries that belong to them.
+  split(payload) {
+    const fwd = this.cfg.forward || {};
+    const targets = new Set();
+    const mine = [];
+    for (const entry of (payload && payload.entry) || []) {
+      const url = fwd[String(entry.id)];
+      if (url) targets.add(url);
+      else if (!this.cfg.accountId || String(entry.id) === this.cfg.accountId) mine.push(entry); // events for accounts that are not ours are dropped
+    }
+    return { targets: [...targets], local: { ...payload, entry: mine } };
+  }
+
+  // Passes the ORIGINAL body and signature on untouched, so the receiving deployment verifies it itself.
+  async forward(url, raw, signature) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        const res = await this.fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': signature || '' }, body: raw, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+        if (res.ok) return true;
+        this.log.warn(`[instagram] forward to ${url} answered ${res.status}`);
+      } catch (e) { this.log.warn(`[instagram] forward to ${url} failed: ${e.message}`); }
+    }
+    return false;
+  }
+
   // Processes a verified webhook payload. Never throws: Meta retries on non-200,
   // and a poison event must not block the queue.
   async handleWebhook(payload) {

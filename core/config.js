@@ -47,6 +47,11 @@ module.exports = {
     verifyToken: env.INSTAGRAM_VERIFY_TOKEN || '',
     handle: (env.INSTAGRAM_HANDLE || '').replace(/^@/, ''),
     apiVersion: env.INSTAGRAM_API_VERSION || 'v23.0',
+    // This deployment's own Instagram account id (the "user_id" from /me). When set, webhook events for any other account are ignored.
+    accountId: (env.INSTAGRAM_ACCOUNT_ID || '').trim(),
+    // Several client accounts can share one Meta app, and Meta delivers all their events to ONE callback URL.
+    // This map hands the events of other accounts on to the deployment that owns them: {"<account id>":"https://other-deployment/webhook/instagram"}.
+    forward: (() => { try { const m = env.INSTAGRAM_FORWARD ? JSON.parse(env.INSTAGRAM_FORWARD) : {}; return Object.fromEntries(Object.entries(m).filter(([id, u]) => /^\d+$/.test(id) && /^https:\/\//.test(u))); } catch { return {}; } })(),
   },
   // Cloudflare Workers AI (preferred when CF_* are set) via its OpenAI-compatible
   // endpoint; otherwise any OpenAI-compatible provider (defaults to Groq).

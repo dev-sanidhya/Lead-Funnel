@@ -56,9 +56,49 @@ function ungrounded(sentence, grounding) {
   return !!(w && !new RegExp(w[1], 'i').test(grounding));
 }
 
+// ---- emojis ----
+// 'light' mode: only these, at most two a message and never two in one sentence, never the one used
+// in the previous message, and none at all in replies that turn someone down.
+const EMOJI_RX = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu;
+const DEFAULT_EMOJIS = ['✨', '🏡', '🛋️', '📐', '🎨', '🌿', '🙌', '😊', '🤍'];
+const baseEmoji = (e) => e.replace(/️/g, '');
+const emojisIn = (text) => (String(text).match(EMOJI_RX) || []);
+
+function tidyEmojis(text, { allowed = DEFAULT_EMOJIS, previous = '', max = 2, none = false } = {}) {
+  const ok = new Set(allowed.map(baseEmoji));
+  const lastUsed = new Set(emojisIn(previous).map(baseEmoji));
+  let kept = 0;
+  const usedHere = new Set();
+  const perSentence = String(text).split(/(?<=[.!?])\s+/).map((sentence) => {
+    let inSentence = 0;
+    return sentence.replace(EMOJI_RX, (e) => {
+      const b = baseEmoji(e);
+      if (none || !ok.has(b) || lastUsed.has(b) || usedHere.has(b) || kept >= max || inSentence >= 1) return '';
+      kept++; inSentence++; usedHere.add(b);
+      return e;
+    });
+  });
+  return perSentence.join(' ').replace(/[ \t]{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1').replace(/\s+$/g, '').trim();
+}
+
+// ---- stock chatbot phrasing ----
+const FILLER_OPENER = /^\s*(?:absolutely|certainly|of course|definitely|sure thing|sure|great question|good question|great choice|wonderful|fantastic|awesome|no problem at all)\s*[!,.:-]+\s*/i;
+const STOCK = /(i hope (this|you)|hope this message finds|don'?t hesitate|do not hesitate|delve|tapestry|elevate your|game[- ]changer|unlock (the|your)|seamless(ly)?|cutting[- ]edge|state[- ]of[- ]the[- ]art|i'?m here to help|happy to assist|i'?d be (happy|glad|delighted) to (help|assist)|rest assured|world[- ]class|bespoke journey|as an ai)/i;
+
+function polish(text) {
+  let t = String(text).replace(FILLER_OPENER, '');
+  const kept = splitSentences(t).filter((s) => !STOCK.test(s));
+  t = kept.join(' ').trim();
+  // at most one exclamation mark: the rest become full stops
+  let bangs = 0;
+  t = t.replace(/!+/g, (m) => (++bangs > 1 ? '.' : '!'));
+  if (t) t = t.charAt(0).toUpperCase() + t.slice(1);
+  return t;
+}
+
 // opts.maxQuestions: 1 for qualification turns, 0 for closings. opts.grounding: the text of facts a reply may rely on.
 
-function sanitizeReply(text, lead, { maxQuestions = 1, maxChars = 650, grounding } = {}) {
+function sanitizeReply(text, lead, { maxQuestions = 1, maxChars = 650, grounding, emojis = 'off', polish: tone = false, previous = '', declining = false } = {}) {
   if (!text) return '';
   let t = String(text)
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -90,7 +130,10 @@ function sanitizeReply(text, lead, { maxQuestions = 1, maxChars = 650, grounding
     const last = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
     out = last > 120 ? cut.slice(0, last + 1) : cut;
   }
-  return out.trim();
+  out = out.trim();
+  if (tone) out = polish(out);
+  if (emojis === 'light') out = tidyEmojis(out, { previous, none: declining });
+  return out;
 }
 
-module.exports = { sanitizeReply, reasksKnown, ungrounded };
+module.exports = { sanitizeReply, reasksKnown, ungrounded, tidyEmojis, polish, emojisIn, DEFAULT_EMOJIS };

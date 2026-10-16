@@ -21,6 +21,10 @@ const DEFAULTS = {
     languages: 'Reply in the language the person writes in (English, Hindi or Hinglish).',
     reveal_minimum: false,
     extra_instructions: '',
+    // 'light' lets replies carry one tasteful emoji from a fixed set; 'off' (the default) keeps them plain.
+    emojis: 'off',
+    // true: strips filler openers and stock chatbot phrases so replies read as written by a person.
+    polish: false,
   },
   qualification: {
     currency: 'INR',
@@ -115,6 +119,8 @@ function sanitize(s) {
   c.min_notice_min = Math.min(10080, Math.max(0, Math.round(Number(c.min_notice_min)) || 0));
   c.max_days_ahead = Math.min(60, Math.max(1, Math.round(Number(c.max_days_ahead)) || 14));
   s.agent.reveal_minimum = !!s.agent.reveal_minimum;
+  s.agent.emojis = s.agent.emojis === 'light' ? 'light' : 'off';
+  s.agent.polish = !!s.agent.polish;
   s.channels.primary = ['auto', 'instagram', 'telegram'].includes(s.channels.primary) ? s.channels.primary : 'auto';
   s.channels.ice_breakers = listish(s.channels.ice_breakers).slice(0, 4);
   s.handoff.alert_stages = listish(s.handoff.alert_stages);

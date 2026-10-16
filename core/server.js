@@ -265,7 +265,9 @@ function createHandler(app) {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     console.log(`[instagram] webhook received: ${JSON.stringify(payload).slice(0, 300)}`);
     res.end('EVENT_RECEIVED'); // acknowledge fast, process after
-    engine.bg(instagram.handleWebhook(payload));
+    const { targets, local } = instagram.split(payload);
+    for (const url of targets) engine.bg(instagram.forward(url, raw, req.headers['x-hub-signature-256']));
+    if (local.entry.length) engine.bg(instagram.handleWebhook(local));
   });
   route('POST', '/api/login', { public: true }, async (req, res) => {
     limit(req, 'login', 10);

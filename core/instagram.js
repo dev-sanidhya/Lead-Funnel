@@ -16,7 +16,9 @@ const crypto = require('node:crypto');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WINDOW_MS = 24 * 3600 * 1000;
 const HUMAN_AGENT_MS = 7 * 24 * 3600 * 1000;
-const MAX_TEXT = 950; // under the 1000 character limit, with headroom for multibyte text
+const MAX_TEXT = 950;
+// Attachments a customer really sent (as opposed to empty companion events, hearts and the like).
+const MEDIA = { image: 'a photo', video: 'a video', audio: 'a voice note', file: 'a file', share: 'a post', ig_reel: 'a reel', reel: 'a reel', story_mention: 'a story', ig_story: 'a story' }; // under the 1000 character limit, with headroom for multibyte text
 
 class InstagramError extends Error {
   constructor(msg, { permanent = false, status = 0, code = 0 } = {}) { super(msg); this.permanent = permanent; this.status = status; this.code = code; }
@@ -251,9 +253,21 @@ class Instagram {
       const text = typeof ev.message.text === 'string' ? ev.message.text.trim() : '';
       if (!text) {
         const lead = (await this.store.getLeadByChat(chatId)) || (await this.engine.bindChat(chatId, prof, { channel: 'instagram', source: 'instagram' })).lead;
-        try { await this.store.addMessage({ lead_id: lead.id, direction: 'in', role: 'user', text: '[sent a non-text message]', ext_id: ev.message.mid || null, processed: true }); } catch { return; }
+        const types = (Array.isArray(ev.message.attachments) ? ev.message.attachments : []).map((a) => String((a && a.type) || '').toLowerCase());
+        const kind = types.find((t) => MEDIA[t]);
+        // Instagram also sends empty companion events (for example 0.4 seconds after a message that contains a
+        // phone number or a link), hearts and unsupported items. The customer did not send those, so they get no
+        // reply and no transcript line: only a note for diagnosis.
+        if (!kind) {
+          await this.store.addEvent(lead.id, 'non_text_ignored', { types, unsupported: !!ev.message.is_unsupported });
+          return;
+        }
+        try { await this.store.addMessage({ lead_id: lead.id, direction: 'in', role: 'user', text: `[sent ${MEDIA[kind]}]`, ext_id: ev.message.mid || null, processed: true }); } catch { return; }
         await this.store.updateLead(lead.id, { last_inbound_at: Date.now() });
-        await this.engine.transportFor(lead).send(lead, 'Thanks! I can only read text messages for now. Could you type that out for me?', { role: 'assistant' }).catch(() => {});
+        const first = (lead.name || '').split(/\s+/)[0];
+        const reply = `Thanks${first ? `, ${first}` : ''}, I can see you sent ${MEDIA[kind]}. I cannot open attachments in this chat yet, so could you tell me in a few words what it shows or what you would like us to see? I will pass it to the team.`;
+        const id = await this.store.addMessage({ lead_id: lead.id, direction: 'out', role: 'assistant', text: reply, status: 'pending' });
+        await this.engine.deliver(id).catch(() => {});
         return;
       }
       await this.engine.receive({ channel: 'instagram', chatId, text, profile: prof, externalId: ev.message.mid || null, token: ref });

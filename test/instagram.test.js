@@ -190,3 +190,54 @@ function refEventWithMessage(sender, ref, text, mid) {
     { sender: { id: sender }, recipient: { id: IG_ID }, timestamp: Date.now(), message: { mid, text } },
   ] }] };
 }
+
+test('INCIDENT: a phone number followed 0.4s later by an empty companion event gets no "I can only read text" reply', async () => {
+  const { app, graph } = await build();
+  await app.instagram.handleWebhook(msgEvent('9200', 'Hi, I want a full home redesign', 'mid.i1'));
+  const lead = await app.store.getLeadByChat('ig:9200');
+  await settle(app, lead.id);
+  await app.instagram.handleWebhook(msgEvent('9200', '9990052074', 'mid.i2'));
+  await settle(app, lead.id); // Aria's real reply to the number
+  // what Instagram sent right after the number: a message event with no text and nothing the customer attached
+  const companion = msgEvent('9200', '', 'mid.i3'); delete companion.entry[0].messaging[0].message.text;
+  const before = sends(graph).length;
+  await app.instagram.handleWebhook(companion);
+  const heart = msgEvent('9200', '', 'mid.i4'); delete heart.entry[0].messaging[0].message.text; heart.entry[0].messaging[0].message.attachments = [{ type: 'like_heart' }];
+  await app.instagram.handleWebhook(heart);
+  await settle(app, lead.id);
+  const texts = (await app.store.getMessages(lead.id)).map((m) => m.text);
+  assert.ok(!texts.some((t) => /non-text|can only read/i.test(t)), 'nothing about non-text appears in the chat');
+  assert.strictEqual(sends(graph).length, before, 'no reply was sent for the companion event or the heart');
+  assert.strictEqual((await app.store.getLead(lead.id)).phone, '9990052074', 'the number itself was captured');
+  assert.ok((await app.store.getEvents(lead.id)).some((e) => e.type === 'non_text_ignored'));
+});
+
+test('a real attachment (voice note) is answered, and the exchange is kept in the transcript', async () => {
+  const { app, graph } = await build();
+  await app.instagram.handleWebhook(msgEvent('9201', 'hello', 'mid.v1'));
+  const lead = await app.store.getLeadByChat('ig:9201');
+  await settle(app, lead.id);
+  const voice = msgEvent('9201', '', 'mid.v2'); delete voice.entry[0].messaging[0].message.text; voice.entry[0].messaging[0].message.attachments = [{ type: 'audio' }];
+  const before = sends(graph).length;
+  await app.instagram.handleWebhook(voice);
+  assert.strictEqual(sends(graph).length, before + 1);
+  const texts = (await app.store.getMessages(lead.id)).map((m) => m.text);
+  assert.ok(texts.includes('[sent a voice note]'));
+  assert.ok(texts.some((t) => /I can see you sent a voice note/.test(t)), 'the reply is recorded too');
+});
+
+test('INCIDENT: the assistant is shown the number itself, so "what is my number?" can be answered', async () => {
+  const { Agent } = require('../core/agent');
+  const { DEFAULTS } = require('../core/settings');
+  const seen = [];
+  const agent = new Agent({ llm: { complete: async (o) => { seen.push(o.system); return 'Your number is 9990052074.'; } } });
+  const settings = JSON.parse(JSON.stringify(DEFAULTS));
+  const lead = { meta: {}, name: 'Atharva', phone: '9990052074', email: 'a@x.com' };
+  const reply = await agent.reply({ type: 'POST', askCallback: false }, { lead, settings, designer: null, summary: '' }, [{ role: 'user', text: 'What is my number?' }]);
+  assert.match(seen[0], /Phone number: 9990052074/);
+  assert.match(seen[0], /read it back exactly/);
+  assert.match(seen[0], /Email: a@x\.com/);
+  assert.strictEqual(reply, 'Your number is 9990052074.');
+  await agent.reply({ type: 'POST', gotPhone: true }, { lead, settings, designer: null, summary: '' }, [{ role: 'user', text: '9990052074' }]);
+  assert.match(seen[1], /read the digits back/);
+});

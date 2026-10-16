@@ -62,8 +62,8 @@ function renderFacts(lead, currency, tz = 'Asia/Kolkata') {
   if (lead.callback_at) rows.push(`Call booked: ${formatWhen(lead.callback_at, tz)}`);
   else if (lead.callback_text) rows.push(`Call preference (no exact time yet): ${lead.callback_text}`);
   if (lead.contact_pref) rows.push(`Best time to reach: ${lead.contact_pref}`);
-  rows.push(lead.phone ? 'Phone number: on file' : 'Phone number: NOT shared yet');
-  if (lead.email) rows.push('Email: on file');
+  rows.push(lead.phone ? `Phone number: ${lead.phone} (they gave it: never ask for it again, and if they ask what number you have, read it back exactly)` : 'Phone number: NOT shared yet');
+  if (lead.email) rows.push(`Email: ${lead.email} (they gave it: never ask for it again)`);
   if (lead.notes) rows.push(`Notes: ${lead.notes}`);
   return rows.length ? rows.join('\n') : '(nothing yet)';
 }
@@ -122,7 +122,7 @@ function directiveBody(d, ctx) {
     case 'HANDOFF':
       return 'They want to talk to a person. Acknowledge warmly, say a team member will take over this chat and reach out shortly, and thank them. Do not ask any question.';
     case 'POST':
-      return `The enquiry is already with the team. Reply briefly and helpfully. If they gave new details, acknowledge them and say the team will use them. Answer questions about the business only from the business facts, and questions about what they told you earlier from what you know about them above and the chat so far. Do not start a new round of qualifying questions.${d.askCallback ? (d.slots && d.slots.length ? ` If it fits naturally, end by trying to book the call: ${slotAsk(d.slots)}` : ' If it fits naturally, end by asking what day and time suit them for the designer call.') : ''}${d.askPhone ? ' If it fits naturally, also ask for the best phone number to reach them on.' : ''}`;
+      return `The enquiry is already with the team. Reply briefly and helpfully. If they gave new details, acknowledge them and say the team will use them. Answer questions about the business only from the business facts, and questions about what they told you earlier from what you know about them above and the chat so far. Do not start a new round of qualifying questions.${d.gotPhone ? ' They just shared their phone number: say you have it and read the digits back so they can check them.' : ''}${d.askCallback ? (d.slots && d.slots.length ? ` If it fits naturally, end by trying to book the call: ${slotAsk(d.slots)}` : ' If it fits naturally, end by asking what day and time suit them for the designer call.') : ''}${d.askPhone ? ' If it fits naturally, also ask for the best phone number to reach them on.' : ''}`;
     case 'FOLLOWUP':
       return `They have not replied for a while (nudge ${d.n} of ${settings.followups.max}). Send a light, friendly 1 to 2 sentence nudge. ${d.slots && d.slots.length ? `Gently remind them about booking the call and ${slotAsk(d.slots)}` : d.field ? `Gently re-ask, in fresh words: ${FIELD_ASK_HINT[d.field]}.` : 'Check if they still need help.'} Never sound pushy or guilt-trip.`;
     case 'DRIP':

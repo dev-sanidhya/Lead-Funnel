@@ -336,7 +336,7 @@ class Engine extends EventEmitter {
       directive = meta.closed_stage === 'human' ? null : { type: 'HANDOFF', reason: reasonText };
     } else if (FINAL.has(stage)) {
       if (meta.closed_stage === stage) {
-        directive = { type: 'POST' };
+        directive = { type: 'POST', gotPhone: changed.includes('phone') };
         if (stage === 'active') {
           if (changed.includes('callback_at') && lead.callback_at) {
             directive = { type: 'CONFIRM_CALLBACK', when: formatWhen(lead.callback_at, settings.business.timezone) };

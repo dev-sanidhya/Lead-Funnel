@@ -77,7 +77,8 @@ class Llm {
   }
 
   estimate(o) {
-    const chars = (o.system || '').length + o.messages.reduce((n, m) => n + String(m.content).length, 0);
+    const size = (c) => (Array.isArray(c) ? c.reduce((n, p) => n + (p.type === 'image_url' ? 3000 : String(p.text || '').length), 0) : String(c).length);
+    const chars = (o.system || '').length + o.messages.reduce((n, m) => n + size(m.content), 0);
     return Math.ceil(chars / 3.6) + Math.min(o.maxTokens || 500, 350);
   }
   used(key) {
@@ -202,6 +203,36 @@ class Llm {
     }
     this.stats.failures++;
     throw lastErr || new LlmError('LLM failed');
+  }
+
+  // Looks at one picture and answers the prompt in plain text. Tries each provider's vision model in turn
+  // (the two Cloudflare accounts), so an exhausted free allowance on one does not stop photos from being read.
+  async vision(opts) {
+    this.stats.calls++;
+    const o = { maxTokens: 200, temperature: 0.2, ...opts };
+    if (this.override) return this.override({ ...o, vision: true, system: o.system || '', messages: [{ role: 'user', content: o.prompt }] });
+    const { mime, bytes } = o.image || {};
+    if (!bytes || !bytes.length) throw new LlmError('No image to look at');
+    const messages = [{ role: 'user', content: [{ type: 'text', text: o.prompt }, { type: 'image_url', image_url: { url: `data:${mime || 'image/jpeg'};base64,${Buffer.from(bytes).toString('base64')}` } }] }];
+    let lastErr;
+    const now = Date.now();
+    for (const provider of this.providers) {
+      if (!provider.apiKey || !(provider.visionModels || []).length || (this.cool[provider.name] || 0) > now) continue;
+      for (const model of provider.visionModels) {
+        try {
+          const text = await this.rawCall({ provider, model, key: `${provider.name}:${model}`, rank: 0 }, { system: o.system, messages, json: false, maxTokens: o.maxTokens, temperature: o.temperature });
+          this.stats.lastOkAt = Date.now();
+          return text;
+        } catch (e) {
+          lastErr = e;
+          this.stats.lastError = `${provider.name}:${model}: ${e.message}`.slice(0, 300);
+          if (e.quota) this.cool[provider.name] = Date.now() + 30 * 60000;
+          else if (e.status === 401 || e.status === 403) this.cool[provider.name] = Date.now() + 10 * 60000;
+        }
+      }
+    }
+    this.stats.failures++;
+    throw lastErr || new LlmError('No vision model is configured');
   }
 
   // JSON completion: asks for JSON, tolerates fences/prose, retries once if unparsable.

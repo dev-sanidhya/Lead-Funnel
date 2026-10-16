@@ -174,6 +174,7 @@ class Engine extends EventEmitter {
     return this.runExclusive(current.id, async () => {
       await this.store.tx(async (t) => {
         await t.run('UPDATE messages SET lead_id=? WHERE lead_id=?', form.id, current.id);
+        await t.run('UPDATE media SET lead_id=? WHERE lead_id=?', form.id, current.id);
         await t.run('DELETE FROM events WHERE lead_id=?', current.id);
         await t.run('DELETE FROM leads WHERE id=?', current.id);
         await t.updateLead(form.id, {
@@ -189,22 +190,40 @@ class Engine extends EventEmitter {
   }
 
   // ---------- inbound ----------
-  async receive({ channel = 'telegram', chatId, text, profile = {}, updateId = null, externalId = null, token = null }) {
+  async receive({ channel = 'telegram', chatId, text, profile = {}, updateId = null, externalId = null, token = null, media = null }) {
     await this.settings.refresh();
     let lead = await this.store.getLeadByChat(chatId);
     if (!lead) lead = (await this.bindChat(chatId, profile, { channel, token })).lead;
+    let messageId;
     try {
-      await this.store.addMessage({ lead_id: lead.id, direction: 'in', role: 'user', text: String(text).slice(0, 4000), tg_update_id: updateId, ext_id: externalId });
+      messageId = await this.store.addMessage({ lead_id: lead.id, direction: 'in', role: 'user', text: String(text).slice(0, 4000), tg_update_id: updateId, ext_id: externalId });
     } catch (e) {
       if (this.store.isDuplicate(e)) return { leadId: lead.id, duplicate: true };
       throw e;
     }
+    if (media) await this.store.addMedia({ lead_id: lead.id, message_id: messageId, mime: media.mime, bytes: media.bytes });
     const meta = { ...lead.meta };
     if (meta.flags && meta.flags.stalled) { meta.flags = { ...meta.flags }; delete meta.flags.stalled; }
     await this.store.updateLead(lead.id, { last_inbound_at: Date.now(), meta });
     this.changed('message', lead.id);
     this.bg(this.drain(lead.id));
     return { leadId: lead.id, duplicate: false };
+  }
+
+  // A picture from the customer: look at it, keep the picture itself, and let the conversation carry on
+  // with a one-line description as the message text (so memory, the summary and the CRM all know what it showed).
+  async receiveImage({ channel = 'instagram', chatId, bytes, mime, profile = {}, externalId = null, token = null }) {
+    await this.settings.refresh();
+    if (externalId && (await this.store.get('SELECT id FROM messages WHERE ext_id=?', externalId))) return { duplicate: true };
+    const lead = (await this.store.getLeadByChat(chatId)) || (await this.bindChat(chatId, profile, { channel, token })).lead;
+    let description = '';
+    try {
+      description = await this.agent.describeImage(lead, this.settings.get(), { mime, bytes });
+    } catch (e) {
+      await this.store.addEvent(lead.id, 'vision_failed', { error: String(e.message).slice(0, 200) });
+    }
+    const text = description ? `[Photo] ${description}` : '[Photo] The customer sent a photo that could not be analysed.';
+    return this.receive({ channel, chatId, text, profile, externalId, token, media: { mime, bytes } });
   }
 
   drain(leadId) {
@@ -799,6 +818,7 @@ class Engine extends EventEmitter {
     if (!lead) return;
     await this.store.tx(async (t) => {
       await t.run('DELETE FROM messages WHERE lead_id=?', leadId);
+      await t.run('DELETE FROM media WHERE lead_id=?', leadId);
       await t.run('DELETE FROM events WHERE lead_id=?', leadId);
       const form = (lead.meta && lead.meta.form) || {};
       await t.updateLead(leadId, {

@@ -91,6 +91,17 @@ CREATE TABLE IF NOT EXISTS designers (
   created_at ${d.big} NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS media (
+  id ${d.pk},
+  lead_id ${d.big} NOT NULL,
+  message_id ${d.big},
+  mime TEXT NOT NULL,
+  data ${d.blob} NOT NULL,
+  created_at ${d.big} NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_media_lead ON media(lead_id);
+CREATE INDEX IF NOT EXISTS idx_media_message ON media(message_id);
+
 CREATE TABLE IF NOT EXISTS webhook_outbox (
   id ${d.pk},
   event TEXT NOT NULL,
@@ -103,8 +114,8 @@ CREATE TABLE IF NOT EXISTS webhook_outbox (
 );
 `;
 
-const SQLITE_DIALECT = { pk: 'INTEGER PRIMARY KEY AUTOINCREMENT', int: 'INTEGER', big: 'INTEGER', real: 'REAL' };
-const PG_DIALECT = { pk: 'BIGSERIAL PRIMARY KEY', int: 'INTEGER', big: 'BIGINT', real: 'DOUBLE PRECISION' };
+const SQLITE_DIALECT = { pk: 'INTEGER PRIMARY KEY AUTOINCREMENT', int: 'INTEGER', big: 'INTEGER', real: 'REAL', blob: 'BLOB' };
+const PG_DIALECT = { pk: 'BIGSERIAL PRIMARY KEY', int: 'INTEGER', big: 'BIGINT', real: 'DOUBLE PRECISION', blob: 'BYTEA' };
 
 const LEAD_COLUMNS = new Set([
   'chat_id', 'channel', 'tg_username', 'name', 'phone', 'email', 'source', 'campaign',
@@ -304,6 +315,7 @@ class Store {
     await this.tx(async (t) => {
       await t.run('DELETE FROM messages WHERE lead_id=?', id);
       await t.run('DELETE FROM events WHERE lead_id=?', id);
+      await t.run('DELETE FROM media WHERE lead_id=?', id);
       await t.run('DELETE FROM leads WHERE id=?', id);
     });
   }
@@ -363,6 +375,22 @@ class Store {
     return rows.slice(Math.min(firstUncovered, Math.max(0, rows.length - min)));
   }
   async countMessages(leadId) { return Number((await this.get('SELECT COUNT(*) c FROM messages WHERE lead_id=?', leadId)).c); }
+
+  // ---- pictures the customer sent (kept here because Instagram's links expire) ----
+  async addMedia({ lead_id, message_id, mime, bytes }) {
+    return this.d.insert('INSERT INTO media(lead_id,message_id,mime,data,created_at) VALUES(?,?,?,?,?)', lead_id, message_id ?? null, mime, Buffer.from(bytes), now());
+  }
+  async getMedia(id) {
+    const r = await this.get('SELECT id, lead_id, message_id, mime, data FROM media WHERE id=?', id);
+    return r ? { ...r, data: Buffer.from(r.data) } : null;
+  }
+  // message id -> media id, for the leads asked about
+  async mediaIndex(leadIds) {
+    const out = new Map();
+    if (!leadIds.length) return out;
+    for (const r of await this.all(`SELECT id, message_id FROM media WHERE message_id IS NOT NULL AND lead_id IN (${leadIds.map(() => '?').join(',')})`, ...leadIds)) out.set(Number(r.message_id), Number(r.id));
+    return out;
+  }
 
   // ---- events ----
   async addEvent(leadId, type, data = {}) {

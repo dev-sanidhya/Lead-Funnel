@@ -81,7 +81,9 @@ module.exports = {
 // GROQ_API_KEY or LLM_FALLBACK_API_KEY) takes over automatically if it runs out of quota.
 {
   const L = module.exports.llm;
-  L.providers = [{ name: useCloudflare ? 'cloudflare' : 'primary', baseUrl: L.baseUrl, apiKey: L.apiKey, models: [L.model, L.fallbackModel].filter(Boolean), tpm: L.tpm }];
+  // Models that can look at a picture. Mistral Small 3.1 works on any Cloudflare account without a licence click.
+  const vision = useCloudflare ? [env.LLM_VISION_MODEL || '@cf/mistralai/mistral-small-3.1-24b-instruct'] : [];
+  L.providers = [{ name: useCloudflare ? 'cloudflare' : 'primary', baseUrl: L.baseUrl, apiKey: L.apiKey, models: [L.model, L.fallbackModel].filter(Boolean), visionModels: vision, tpm: L.tpm }];
   // Extra Cloudflare accounts (CF_ACCOUNT_ID_2 / CF_API_TOKEN_2, then _3 ... _5): when one account's
   // daily free allowance is used up, the next one takes over automatically.
   if (useCloudflare) {
@@ -89,7 +91,7 @@ module.exports = {
       const acct = env[`CF_ACCOUNT_ID_${i}`];
       const tok = env[`CF_API_TOKEN_${i}`];
       if (!acct || !tok) continue;
-      L.providers.push({ name: `cloudflare-${i}`, baseUrl: `https://api.cloudflare.com/client/v4/accounts/${acct}/ai/v1`, apiKey: tok, models: [L.model, L.fallbackModel].filter(Boolean), tpm: L.tpm });
+      L.providers.push({ name: `cloudflare-${i}`, baseUrl: `https://api.cloudflare.com/client/v4/accounts/${acct}/ai/v1`, apiKey: tok, models: [L.model, L.fallbackModel].filter(Boolean), visionModels: vision, tpm: L.tpm });
     }
   }
   const backupKey = env.LLM_FALLBACK_API_KEY || (useCloudflare ? env.GROQ_API_KEY : '');

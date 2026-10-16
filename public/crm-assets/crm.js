@@ -50,10 +50,19 @@
   function transcriptHtml(lead) {
     return (lead.transcript || [])
       .map(function (m) {
+        var body;
+        if (m.image) {
+          // a picture the customer sent: show it exactly as sent, with what the assistant understood from it
+          var caption = String(m.content || '').replace(/^\[Photo\]\s*/, '');
+          body = '<a href="' + m.image + '" target="_blank" rel="noopener"><img class="t-img" src="' + m.image + '" alt="Photo sent by the customer" loading="lazy" /></a>' +
+            (caption ? '<span class="t-cap">' + escapeHtml(caption) + '</span>' : '');
+        } else {
+          body = escapeHtml(m.content);
+        }
         return (
           '<div class="t-msg ' + (m.role === 'user' ? 'user' : 'bot') + '">' +
           '<span class="t-role">' + (m.role === 'user' ? 'Visitor' : 'Assistant') + '</span>' +
-          escapeHtml(m.content) +
+          body +
           '</div>'
         );
       })

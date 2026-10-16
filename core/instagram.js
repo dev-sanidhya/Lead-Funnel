@@ -17,6 +17,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WINDOW_MS = 24 * 3600 * 1000;
 const HUMAN_AGENT_MS = 7 * 24 * 3600 * 1000;
 const MAX_TEXT = 950;
+const IMAGE_HOSTS = /(^|\.)(fbsbx\.com|cdninstagram\.com|fbcdn\.net|instagram\.com)$/i;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 // Attachments a customer really sent (as opposed to empty companion events, hearts and the like).
 const MEDIA = { image: 'a photo', video: 'a video', audio: 'a voice note', file: 'a file', share: 'a post', ig_reel: 'a reel', reel: 'a reel', story_mention: 'a story', ig_story: 'a story' }; // under the 1000 character limit, with headroom for multibyte text
 
@@ -178,6 +180,23 @@ class Instagram {
     return last && last.message_id;
   }
 
+  // Downloads a picture the customer sent. Only Meta's own image hosts are fetched, and only images up to 8 MB.
+  async fetchImage(url) {
+    let u;
+    try { u = new URL(url); } catch { return null; }
+    if (u.protocol !== 'https:' || !IMAGE_HOSTS.test(u.hostname)) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const res = await this.fetch(u.toString(), { signal: ctrl.signal });
+      if (!res.ok) return null;
+      const mime = String(res.headers && res.headers.get ? res.headers.get('content-type') || '' : '').split(';')[0].trim().toLowerCase();
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (!/^image\//.test(mime) || !bytes.length || bytes.length > MAX_IMAGE_BYTES) return null;
+      return { mime, bytes };
+    } catch { return null; } finally { clearTimeout(timer); }
+  }
+
   // ---------- webhook ----------
   verifyChallenge(query) {
     if (query.get('hub.mode') === 'subscribe' && this.cfg.verifyToken && query.get('hub.verify_token') === this.cfg.verifyToken) return query.get('hub.challenge');
@@ -261,6 +280,18 @@ class Instagram {
         if (!kind) {
           await this.store.addEvent(lead.id, 'non_text_ignored', { types, unsupported: !!ev.message.is_unsupported });
           return;
+        }
+        // A photo is looked at and kept: the assistant answers what is in it and the picture shows in the CRM.
+        if (kind === 'image') {
+          const shots = (ev.message.attachments || []).filter((a) => a && String(a.type).toLowerCase() === 'image' && a.payload && a.payload.url).slice(0, 4);
+          let handled = 0;
+          for (const [i, a] of shots.entries()) {
+            const img = await this.fetchImage(a.payload.url);
+            if (!img) continue;
+            await this.engine.receiveImage({ channel: 'instagram', chatId, bytes: img.bytes, mime: img.mime, profile: prof, externalId: ev.message.mid ? `${ev.message.mid}${i ? `:${i}` : ''}` : null, token: ref });
+            handled++;
+          }
+          if (handled) return;
         }
         try { await this.store.addMessage({ lead_id: lead.id, direction: 'in', role: 'user', text: `[sent ${MEDIA[kind]}]`, ext_id: ev.message.mid || null, processed: true }); } catch { return; }
         await this.store.updateLead(lead.id, { last_inbound_at: Date.now() });

@@ -162,6 +162,7 @@ ${directiveText(directive, ctx)}
 HARD RULES (never break these):
 - If asked something outside this business, politely steer back to how the team can help with their space. Never go along with the off-topic request.
 - Check before you agree. When the customer asks you to confirm something ("did I say my budget was 20 lakh?", "didn't you promise X?"), compare it with what you know about them above and the chat. If it does not match, politely correct them with the right detail; never say yes just because they asked. Never agree to a discount, promise or commitment the business facts do not contain.
+- A message that starts with "[Photo]" is a picture the customer sent, and the words after it describe what it shows. React like a person who just looked at it: one concrete observation about the picture (never a generic compliment), then carry on with your task. Never say you cannot see or open photos, and never quote the bracket or the description word for word. If it says the photo could not be analysed, thank them, say you have passed it to the team and ask what it shows.
 - You remember the whole chat: everything above and in the messages is real. If the customer asks what they told you earlier, answer from it exactly; if it is not there, say you do not have that and ask. Never make up something they supposedly said.
 - Never invent prices, discounts, timelines or services that are not in the business facts. When unsure, invite them to a free consultation for exact numbers.
 - Never claim the team has worked on projects in a particular area, never mention past clients, awards, years in business, team size or any numbers, unless they are written in the business facts above. Stay warm and general instead ("we'd love to help with that").
@@ -255,6 +256,15 @@ class Agent {
       previous: previous ? previous.text : '', declining: ['CLOSE_DISQUALIFIED', 'HANDOFF'].includes(directive.type),
     });
     return clean;
+  }
+
+  // What a colleague who cannot see the picture needs to know. Used as the message text, so the whole
+  // conversation (and its memory) carries what the photo showed.
+  async describeImage(lead, settings, image) {
+    const b = settings.business;
+    const prompt = `You work for ${b.name}. ${String(b.description || '').slice(0, 220)} A customer has just sent this picture in a chat. Describe it for a colleague who cannot see it, in at most two plain sentences and under 280 characters: what it shows (a room, a floor plan, an inspiration picture, a product, a screenshot, a document), the style, colours, materials and condition, and any visible text, measurements or numbers. Note anything relevant to the work we do. Do not identify any person, only say "a person". No lists, no markdown, no em dashes.`;
+    const raw = await this.llm.vision({ prompt, image, maxTokens: 160 });
+    return String(raw || '').replace(/[‒-―]/g, ', ').replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s]+$/g, '').slice(0, 300);
   }
 
   async summarize(lead, previous, messages, settings) {

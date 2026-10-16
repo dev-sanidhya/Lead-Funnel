@@ -19,6 +19,12 @@ class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
+// Marks which messages carry a picture, so the console can show it.
+async function withMedia(store, leadId, messages) {
+  const idx = await store.mediaIndex([leadId]);
+  return messages.map((m) => (idx.has(Number(m.id)) ? { ...m, media_id: idx.get(Number(m.id)) } : m));
+}
+
 function createHandler(app) {
   const { config, store, settings, engine, telegram, instagram, scheduler, simulator, llm, calendar } = app;
   const sessionKey = crypto.createHmac('sha256', `${config.adminPassword}|${config.intakeSecret}`).update('session-v1').digest('hex');
@@ -313,13 +319,19 @@ function createHandler(app) {
     const { lead } = await createIntake(body, first(body.source) || 'admin');
     send(res, 200, { ok: true, id: lead.id, ...chatLinks(lead) });
   });
+  route('GET', '/api/media/:id', async (req, res, { params }) => {
+    const m = await store.getMedia(Number(params.id));
+    if (!m) throw new HttpError(404, 'Not found');
+    res.writeHead(200, { 'Content-Type': m.mime, 'Cache-Control': 'private, max-age=86400', 'Content-Disposition': 'inline', 'X-Content-Type-Options': 'nosniff' });
+    res.end(m.data);
+  });
   route('GET', '/api/leads/:id', async (req, res, { params }) => {
     const lead = await store.getLead(Number(params.id));
     if (!lead) throw new HttpError(404, 'Lead not found');
     const [card] = await leadCards([lead]);
     send(res, 200, {
       lead: card,
-      messages: await store.getMessages(lead.id),
+      messages: await withMedia(store, lead.id, await store.getMessages(lead.id)),
       events: await store.getEvents(lead.id),
       telegram_url: lead.chat_id ? null : chatLinks(lead).chat_url,
       meta: { memory: lead.meta.memory || [], fu: lead.meta.fu || {}, declined: lead.meta.declined || {}, flags: lead.meta.flags || {}, asked: lead.meta.asked || {}, followups_sent: lead.meta.followups_sent || 0, drips_sent: lead.meta.drips_sent || 0 },

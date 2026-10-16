@@ -190,6 +190,18 @@ class Engine extends EventEmitter {
     });
   }
 
+  // Deletes photos (files in storage and the database copy) and leaves a "removed" note in the chat.
+  // If storage refuses, nothing is marked removed, so the next attempt tries again.
+  async removeMedia(rows) {
+    const paths = rows.map((r) => r.storage_path).filter(Boolean);
+    if (paths.length) {
+      if (!this.photos || !this.photos.canDelete) throw new Error('Photo deletion is not set up on this deployment');
+      await this.photos.remove(paths);
+    }
+    await this.store.markMediaRemoved(rows.map((r) => r.id));
+    return rows.length;
+  }
+
   // ---------- inbound ----------
   async receive({ channel = 'telegram', chatId, text, profile = {}, updateId = null, externalId = null, token = null, media = null }) {
     await this.settings.refresh();
@@ -205,7 +217,7 @@ class Engine extends EventEmitter {
     if (media) {
       // storage first (it has its own space); the database only if storage is off or refuses the upload
       const path = this.photos ? await this.photos.put(lead.id, media.mime, media.bytes) : null;
-      await this.store.addMedia({ lead_id: lead.id, message_id: messageId, mime: media.mime, bytes: path ? null : media.bytes, path });
+      await this.store.addMedia({ lead_id: lead.id, message_id: messageId, mime: media.mime, bytes: path ? null : media.bytes, path, size: media.bytes.length });
     }
     const meta = { ...lead.meta };
     if (meta.flags && meta.flags.stalled) { meta.flags = { ...meta.flags }; delete meta.flags.stalled; }

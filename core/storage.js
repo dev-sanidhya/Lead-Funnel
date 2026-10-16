@@ -17,15 +17,33 @@ const MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'im
 const PATH_OK = /^\d+\/[0-9a-f]{32}\.(jpg|png|webp|gif)$/;
 
 class PhotoStore {
-  constructor({ url, key, bucket } = {}, { fetchImpl, log = console } = {}) {
+  constructor({ url, key, bucket, purgeSecret } = {}, { fetchImpl, log = console } = {}) {
     this.url = String(url || '').replace(/\/+$/, '');
     this.key = key || '';
     this.bucket = bucket || '';
+    this.purgeSecret = purgeSecret || '';
     this.fetch = fetchImpl || globalThis.fetch;
     this.log = log;
   }
 
   get enabled() { return !!(this.url && this.key && this.bucket); }
+  get canDelete() { return this.enabled && !!this.purgeSecret; }
+
+  // Deletes stored photos. The public key cannot delete, so this asks the project's own `purge-photos`
+  // function (which holds the service key privately and only deletes well-formed photo names in our buckets).
+  async remove(paths) {
+    const list = (paths || []).filter((p) => PATH_OK.test(String(p)));
+    if (!list.length) return 0;
+    if (!this.canDelete) throw new Error('Photo deletion is not set up on this deployment');
+    const res = await this.fetch(`${this.url}/functions/v1/purge-photos`, {
+      method: 'POST',
+      headers: { apikey: this.key, Authorization: `Bearer ${this.key}`, 'Content-Type': 'application/json', 'x-purge-secret': this.purgeSecret },
+      body: JSON.stringify({ bucket: this.bucket, paths: list.slice(0, 200) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`Photo deletion failed (${res.status}): ${data.error || 'unknown error'}`);
+    return Number(data.removed) || 0;
+  }
 
   // Returns the stored path, or null when the photo should go to the database instead.
   async put(leadId, mime, bytes) {

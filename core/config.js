@@ -32,8 +32,12 @@ module.exports = {
   // Postgres connection string (Supabase pooler). When set it replaces the local SQLite file.
   databaseUrl: env.DATABASE_URL || '',
   cronSecret: env.CRON_SECRET || '',
+  // A second, narrower login: the studio's own team gets this password and sees only the Lead Inbox (/crm).
+  crmPassword: env.CRM_PASSWORD || '',
+  // What the storage meter in the Lead Inbox treats as 100%: this client's share of the free plan (MB).
+  limits: { photosMb: Number(env.STORAGE_LIMIT_MB) || 1024, dbMb: Number(env.DB_LIMIT_MB) || 500 },
   // Supabase Storage for customers' photos (see core/storage.js). Without it photos are kept in the database.
-  storage: { url: env.SUPABASE_URL || '', key: env.SUPABASE_ANON_KEY || '', bucket: env.STORAGE_BUCKET || '' },
+  storage: { url: env.SUPABASE_URL || '', key: env.SUPABASE_ANON_KEY || '', bucket: env.STORAGE_BUCKET || '', purgeSecret: env.STORAGE_PURGE_SECRET || '' },
   // Google service account (JSON) that books calls on the owner's calendar. See core/calendar.js.
   googleServiceAccount: (() => { try { return env.GOOGLE_SERVICE_ACCOUNT_JSON ? JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON) : null; } catch { return null; } })(),
   serverless: !!(env.VERCEL || env.SERVERLESS),

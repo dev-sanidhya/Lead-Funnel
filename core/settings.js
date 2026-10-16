@@ -54,6 +54,8 @@ const DEFAULTS = {
     primary: 'auto',
     ice_breakers: ['Get a free design quote', 'Check if my project fits', 'Talk about my budget'],
   },
+  // How long customers' photos are kept. 0 keeps them for ever; N deletes each photo N days after it was sent.
+  retention: { photo_days: 0 },
   calendar: {
     enabled: false,
     calendar_id: '',
@@ -107,6 +109,7 @@ function sanitize(s) {
   f.quiet_start_hour = Math.min(24, Math.max(0, Math.round(Number(f.quiet_start_hour)) || 0));
   f.quiet_end_hour = Math.min(24, Math.max(0, Math.round(Number(f.quiet_end_hour)) || 0));
   try { new Intl.DateTimeFormat('en-US', { timeZone: s.business.timezone }); } catch { s.business.timezone = 'Asia/Kolkata'; }
+  s.retention.photo_days = Math.min(3650, Math.max(0, Math.round(Number(s.retention.photo_days)) || 0));
   const c = s.calendar;
   c.enabled = !!c.enabled;
   c.calendar_id = String(c.calendar_id || '').trim();

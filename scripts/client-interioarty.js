@@ -62,6 +62,8 @@ const SETTINGS = {
     project_types: ['Full home', 'Modular kitchen', 'Office', 'Renovation', 'Design only', 'Other'],
   },
   followups: { enabled: true },
+  // Photos are deleted 90 days after they were sent, which keeps storage far below the free limit.
+  retention: { photo_days: 90 },
   channels: {
     primary: 'instagram',
     ice_breakers: ['What services do you offer?', 'How much does interior design cost?', 'How long does a full home project take?'],

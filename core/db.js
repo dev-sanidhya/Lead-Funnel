@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS media (
   mime TEXT NOT NULL,
   data ${d.blob},
   storage_path TEXT,
+  removed_at ${d.big},
+  size ${d.big},
   created_at ${d.big} NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_media_lead ON media(lead_id);
@@ -254,6 +256,11 @@ class Store {
     // Photos moved from the database to Supabase Storage: a row now holds either the bytes or the storage path.
     const media = await this.d.tableColumns('media');
     if (!media.includes('storage_path')) await this.d.exec('ALTER TABLE media ADD COLUMN storage_path TEXT');
+    if (!media.includes('removed_at')) await this.d.exec(`ALTER TABLE media ADD COLUMN removed_at ${dialect.big}`);
+    if (!media.includes('size')) {
+      await this.d.exec(`ALTER TABLE media ADD COLUMN size ${dialect.big}`);
+      await this.d.exec(`UPDATE media SET size=${this.d.kind === 'pg' ? 'octet_length(data)' : 'length(data)'} WHERE data IS NOT NULL AND size IS NULL`);
+    }
     if (this.d.kind === 'pg') await this.d.exec('ALTER TABLE media ALTER COLUMN data DROP NOT NULL');
   }
 
@@ -382,19 +389,52 @@ class Store {
   async countMessages(leadId) { return Number((await this.get('SELECT COUNT(*) c FROM messages WHERE lead_id=?', leadId)).c); }
 
   // ---- pictures the customer sent (kept here because Instagram's links expire) ----
-  async addMedia({ lead_id, message_id, mime, bytes = null, path = null }) {
-    return this.d.insert('INSERT INTO media(lead_id,message_id,mime,data,storage_path,created_at) VALUES(?,?,?,?,?,?)', lead_id, message_id ?? null, mime, bytes ? Buffer.from(bytes) : null, path, now());
+  async addMedia({ lead_id, message_id, mime, bytes = null, path = null, size = null }) {
+    return this.d.insert('INSERT INTO media(lead_id,message_id,mime,data,storage_path,size,created_at) VALUES(?,?,?,?,?,?,?)', lead_id, message_id ?? null, mime, bytes ? Buffer.from(bytes) : null, path, size ?? (bytes ? bytes.length : null), now());
   }
   async getMedia(id) {
-    const r = await this.get('SELECT id, lead_id, message_id, mime, data, storage_path FROM media WHERE id=?', id);
+    const r = await this.get('SELECT id, lead_id, message_id, mime, data, storage_path, removed_at FROM media WHERE id=?', id);
     return r ? { ...r, data: r.data ? Buffer.from(r.data) : null } : null;
   }
-  // message id -> media id, for the leads asked about
+  // message id -> media id, for photos that are still there
   async mediaIndex(leadIds) {
     const out = new Map();
     if (!leadIds.length) return out;
-    for (const r of await this.all(`SELECT id, message_id FROM media WHERE message_id IS NOT NULL AND lead_id IN (${leadIds.map(() => '?').join(',')})`, ...leadIds)) out.set(Number(r.message_id), Number(r.id));
+    for (const r of await this.all(`SELECT id, message_id FROM media WHERE message_id IS NOT NULL AND removed_at IS NULL AND lead_id IN (${leadIds.map(() => '?').join(',')})`, ...leadIds)) out.set(Number(r.message_id), Number(r.id));
     return out;
+  }
+  // message id -> { id, removed }, so the inbox can show a "photo removed" note where one used to be
+  async mediaState(leadIds) {
+    const out = new Map();
+    if (!leadIds.length) return out;
+    for (const r of await this.all(`SELECT id, message_id, removed_at FROM media WHERE message_id IS NOT NULL AND lead_id IN (${leadIds.map(() => '?').join(',')})`, ...leadIds)) out.set(Number(r.message_id), { id: Number(r.id), removed: r.removed_at != null });
+    return out;
+  }
+  // How much room this deployment's data takes: photos still kept, and the database tables themselves.
+  async footprint() {
+    const p = await this.get('SELECT COUNT(*) c, COALESCE(SUM(size),0) b FROM media WHERE removed_at IS NULL');
+    let db = 0;
+    if (this.d.kind === 'pg') {
+      const r = await this.get("SELECT COALESCE(SUM(pg_total_relation_size(c.oid)),0) b FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname = current_schema() AND c.relkind = 'r'");
+      db = Number(r.b);
+    } else {
+      const [pc, ps] = [await this.get('PRAGMA page_count'), await this.get('PRAGMA page_size')];
+      db = Number(pc.page_count) * Number(ps.page_size);
+    }
+    return { photos: Number(p.c), photo_bytes: Number(p.b), db_bytes: db };
+  }
+  // photos (still stored) of the given leads
+  async mediaOfLeads(leadIds) {
+    if (!leadIds.length) return [];
+    return this.all(`SELECT id, lead_id, storage_path, COALESCE(size,0) size FROM media WHERE removed_at IS NULL AND lead_id IN (${leadIds.map(() => '?').join(',')})`, ...leadIds);
+  }
+  // photos older than the retention period that are still stored
+  expiredMedia(beforeMs, limit = 100) {
+    return this.all('SELECT id, storage_path FROM media WHERE removed_at IS NULL AND created_at<? ORDER BY id LIMIT ?', beforeMs, limit);
+  }
+  markMediaRemoved(ids) {
+    if (!ids.length) return Promise.resolve();
+    return this.run(`UPDATE media SET data=NULL, storage_path=NULL, removed_at=? WHERE id IN (${ids.map(() => '?').join(',')})`, now(), ...ids);
   }
 
   // ---- events ----

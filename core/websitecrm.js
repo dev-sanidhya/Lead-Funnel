@@ -28,6 +28,7 @@ function sourceOf(lead) {
 
 // A funnel lead in the shape the Lead Inbox page already understands.
 function toCrmLead(lead, messages, settings, media = new Map()) {
+  const pic = (m) => media.get(Number(m.id));
   const tz = settings.business.timezone;
   const cur = settings.qualification.currency;
   const months = lead.timeline_months;
@@ -49,13 +50,14 @@ function toCrmLead(lead, messages, settings, media = new Map()) {
     call: lead.callback_at ? formatWhen(lead.callback_at, tz) : '',
     status: STATUSES.includes(lead.meta.crm_status) ? lead.meta.crm_status : 'new',
     time: new Date(lead.created_at).toISOString(),
-    transcript: messages.map((m) => ({ role: m.direction === 'in' ? 'user' : 'assistant', content: m.text, ...(media.has(Number(m.id)) ? { image: `/api/media/${media.get(Number(m.id))}` } : {}) })),
+    transcript: messages.map((m) => ({ role: m.direction === 'in' ? 'user' : 'assistant', content: m.text, ...(pic(m) ? (pic(m).removed ? { removed: true } : { image: `/api/media/${pic(m).id}` }) : {}) })),
     summarizing: false,
   };
 }
 
-function mount({ route, send, readBody, limit, HttpError, store, settings, engine }) {
-  route('GET', '/api/crm/leads', async (req, res) => {
+function mount({ route, send, readBody, limit, HttpError, store, settings, engine, config }) {
+  cleanupApi({ route, send, readBody, limit, HttpError, store, settings, engine, config });
+  route('GET', '/api/crm/leads', { crm: true }, async (req, res) => {
     const s = settings.get();
     const leads = await store.listLeads({ channel: 'real', limit: 500 });
     const ids = leads.map((l) => l.id);
@@ -65,11 +67,11 @@ function mount({ route, send, readBody, limit, HttpError, store, settings, engin
       const rows = await store.all(`SELECT id, lead_id, direction, text FROM messages WHERE lead_id IN (${ids.map(() => '?').join(',')}) ORDER BY id`, ...ids);
       for (const m of rows) { if (!byLead.has(m.lead_id)) byLead.set(m.lead_id, []); byLead.get(m.lead_id).push(m); }
     }
-    const media = await store.mediaIndex(ids);
+    const media = await store.mediaState(ids);
     send(res, 200, { leads: leads.map((l) => toCrmLead(l, (byLead.get(l.id) || []).slice(-80), s, media)) });
   });
 
-  route('PATCH', '/api/crm/leads/:id', async (req, res, { params }) => {
+  route('PATCH', '/api/crm/leads/:id', { crm: true }, async (req, res, { params }) => {
     const b = await readBody(req);
     if (!STATUSES.includes(b.status)) throw new HttpError(400, 'status must be new, contacted or closed');
     const lead = await store.getLead(Number(params.id));
@@ -128,4 +130,90 @@ function mount({ route, send, readBody, limit, HttpError, store, settings, engin
   });
 }
 
-module.exports = { mount, toCrmLead, sourceOf };
+// ---------- keeping the data small: storage meter and clean-up ----------
+const DAY = 86400000;
+const RETENTION_CHOICES = [0, 30, 60, 90, 180, 365];
+const MAX_PER_CALL = 100; // leads deleted per request, so one call always finishes in time; the page repeats until done
+
+function cleanupApi({ route, send, readBody, limit, HttpError, store, settings, engine, config }) {
+  const mb = (n) => Math.round(n * 1024 * 1024);
+
+  // Leads old enough, and in the right state, for a clean-up. "Age" is the last time the customer wrote.
+  async function pick({ days, status }) {
+    const d = Math.max(1, Math.min(3650, Math.round(Number(days)) || 0));
+    if (!Number(days)) throw new HttpError(400, 'Choose how old a lead must be');
+    const cutoff = Date.now() - d * DAY;
+    const leads = (await store.listLeads({ channel: 'real', limit: 5000 })).filter((l) => {
+      const when = l.last_inbound_at || l.updated_at || l.created_at;
+      const st = STATUSES.includes(l.meta.crm_status) ? l.meta.crm_status : 'new';
+      return when < cutoff && (status === 'any' || st === (status || 'closed'));
+    });
+    return leads;
+  }
+
+  async function summarise(leads) {
+    const media = await store.mediaOfLeads(leads.map((l) => l.id));
+    return { leads: leads.length, photos: media.length, photo_leads: new Set(media.map((m) => m.lead_id)).size, bytes: media.reduce((n, m) => n + Number(m.size || 0), 0), media };
+  }
+
+  // Deletes the photos of these leads (files and database), and optionally the leads themselves.
+  // Storage goes first: if it refuses, nothing is deleted, so a lead never loses its record but keeps an orphan photo.
+  async function run(leads, scope) {
+    const batch = leads.slice(0, MAX_PER_CALL);
+    const { media, photos, bytes } = await summarise(batch);
+    if (media.length) {
+      try { await engine.removeMedia(media); } catch (e) { throw new HttpError(502, e.message); }
+    }
+    if (scope === 'leads') for (const l of batch) await store.deleteLead(l.id);
+    return { leads: scope === 'leads' ? batch.length : 0, photos, bytes, remaining: leads.length - batch.length };
+  }
+
+  route('GET', '/api/crm/usage', { crm: true }, async (req, res) => {
+    const f = await store.footprint();
+    const total = await store.get("SELECT COUNT(*) c FROM leads WHERE channel!='sim'");
+    send(res, 200, {
+      photos: { count: f.photos, used: f.photo_bytes, limit: mb(config.limits.photosMb) },
+      database: { used: f.db_bytes, limit: mb(config.limits.dbMb) },
+      leads: Number(total.c),
+      photo_days: settings.get().retention.photo_days,
+      can_delete_photos: !!(engine.photos && engine.photos.canDelete),
+    });
+  });
+
+  route('POST', '/api/crm/cleanup/preview', { crm: true }, async (req, res) => {
+    const b = await readBody(req);
+    const leads = await pick(b);
+    const sum = await summarise(leads);
+    send(res, 200, { leads: b.scope === 'leads' ? sum.leads : 0, matching_leads: sum.leads, photo_leads: sum.photo_leads, photos: sum.photos, bytes: sum.bytes });
+  });
+
+  route('POST', '/api/crm/cleanup', { crm: true }, async (req, res) => {
+    limit(req, 'cleanup', 30);
+    const b = await readBody(req);
+    if (b.scope !== 'photos' && b.scope !== 'leads') throw new HttpError(400, 'Choose photos or leads');
+    send(res, 200, { ok: true, ...(await run(await pick(b), b.scope)) });
+  });
+
+  // Delete the leads (or only the photos) the user ticked in the inbox.
+  route('POST', '/api/crm/leads/delete', { crm: true }, async (req, res) => {
+    limit(req, 'cleanup', 30);
+    const b = await readBody(req);
+    if (b.scope !== 'photos' && b.scope !== 'leads') throw new HttpError(400, 'Choose photos or leads');
+    const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(Number).filter(Number.isInteger))].slice(0, 200);
+    if (!ids.length) throw new HttpError(400, 'No leads selected');
+    const leads = [];
+    for (const id of ids) { const l = await store.getLead(id); if (l && l.channel !== 'sim') leads.push(l); }
+    send(res, 200, { ok: true, ...(await run(leads, b.scope)) });
+  });
+
+  // Automatic deletion of photos after N days, chosen by the studio.
+  route('PUT', '/api/crm/retention', { crm: true }, async (req, res) => {
+    const b = await readBody(req);
+    const days = Number(b.photo_days);
+    if (!RETENTION_CHOICES.includes(days)) throw new HttpError(400, `Choose one of ${RETENTION_CHOICES.join(', ')}`);
+    await settings.update({ retention: { photo_days: days } });
+    send(res, 200, { ok: true, photo_days: days });
+  });
+}
+
+module.exports = { mount, toCrmLead, sourceOf, cleanupApi };

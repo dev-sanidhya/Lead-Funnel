@@ -42,6 +42,13 @@ function createHandler(app) {
     const c = cookies(req).fsid || '';
     return c.length === sessionKey.length && crypto.timingSafeEqual(Buffer.from(c), Buffer.from(sessionKey));
   };
+  // The studio's own login: it opens the Lead Inbox and nothing else (routes marked { crm: true }).
+  const crmKey = config.crmPassword ? crypto.createHmac('sha256', `${config.crmPassword}|${config.intakeSecret}`).update('crm-session-v1').digest('hex') : null;
+  const isCrm = (req) => {
+    if (!crmKey) return false;
+    const c = cookies(req).fcrm || '';
+    return c.length === crmKey.length && crypto.timingSafeEqual(Buffer.from(c), Buffer.from(crmKey));
+  };
   const safeEqual = (a, b) => {
     const x = crypto.createHash('sha256').update(String(a)).digest();
     const y = crypto.createHash('sha256').update(String(b)).digest();
@@ -213,12 +220,12 @@ function createHandler(app) {
     if (typeof opts === 'function') { handler = opts; opts = {}; }
     const keys = [];
     const rx = new RegExp(`^${pattern.replace(/:(\w+)/g, (_, k) => { keys.push(k); return '([^/]+)'; })}$`);
-    routes.push({ method, rx, keys, handler, public: !!opts.public });
+    routes.push({ method, rx, keys, handler, public: !!opts.public, crm: !!opts.crm });
   };
 
   // Pages
   const page = (file) => () => fs.readFileSync(path.join(PUBLIC, file));
-  route('GET', '/', { public: true }, async (req, res) => { res.writeHead(302, { Location: '/admin' }); res.end(); });
+  route('GET', '/', { public: true }, async (req, res) => { res.writeHead(302, { Location: config.crmPassword ? '/crm' : '/admin' }); res.end(); });
   route('GET', '/form', { public: true }, async (req, res) => send(res, 200, page('form.html')()));
   route('GET', '/admin', { public: true }, async (req, res) => send(res, 200, page('admin.html')()));
   route('GET', '/privacy', { public: true }, async (req, res) => send(res, 200, page('privacy.html')()));
@@ -290,9 +297,19 @@ function createHandler(app) {
     send(res, 200, { ok: true }, { 'Set-Cookie': `fsid=${sessionKey}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${30 * 86400}` });
   });
   route('POST', '/api/logout', { public: true }, async (req, res) => {
-    send(res, 200, { ok: true }, { 'Set-Cookie': 'fsid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' });
+    send(res, 200, { ok: true }, { 'Set-Cookie': ['fsid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0', 'fcrm=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'] });
   });
-  route('GET', '/api/me', { public: true }, async (req, res) => send(res, 200, { admin: isAdmin(req) }));
+  // Sign-in for the Lead Inbox page: the studio password opens the inbox only; the admin password still opens everything.
+  route('POST', '/api/crm-login', { public: true }, async (req, res) => {
+    limit(req, 'login', 10);
+    const body = await readBody(req);
+    const given = body.password || '';
+    const age = `HttpOnly; SameSite=Lax; Path=/; Max-Age=${30 * 86400}`;
+    if (config.crmPassword && safeEqual(given, config.crmPassword)) return send(res, 200, { ok: true, role: 'studio' }, { 'Set-Cookie': `fcrm=${crmKey}; ${age}` });
+    if (safeEqual(given, config.adminPassword)) return send(res, 200, { ok: true, role: 'admin' }, { 'Set-Cookie': `fsid=${sessionKey}; ${age}` });
+    throw new HttpError(401, 'Wrong password');
+  });
+  route('GET', '/api/me', { public: true }, async (req, res) => send(res, 200, { admin: isAdmin(req), studio: isCrm(req) }));
 
   // Admin API
   route('GET', '/api/bootstrap', async (req, res) => {
@@ -319,15 +336,24 @@ function createHandler(app) {
     const { lead } = await createIntake(body, first(body.source) || 'admin');
     send(res, 200, { ok: true, id: lead.id, ...chatLinks(lead) });
   });
-  route('GET', '/api/media/:id', async (req, res, { params }) => {
+  route('GET', '/api/media/:id', { crm: true }, async (req, res, { params }) => {
     const m = await store.getMedia(Number(params.id));
-    if (!m) throw new HttpError(404, 'Not found');
+    if (!m || m.removed_at) throw new HttpError(404, 'Not found');
     // the bytes live in the database, or in Supabase Storage whose address is never shown to the browser
     let bytes = m.data;
     if (!bytes && m.storage_path) { const f = await engine.photos.get(m.storage_path); bytes = f && f.bytes; }
     if (!bytes) throw new HttpError(404, 'Photo unavailable');
     res.writeHead(200, { 'Content-Type': m.mime, 'Cache-Control': 'private, max-age=86400', 'Content-Disposition': 'inline', 'X-Content-Type-Options': 'nosniff' });
     res.end(bytes);
+  });
+  // Delete one photo (the studio can do this from the inbox); the chat keeps a "photo removed" note.
+  route('DELETE', '/api/media/:id', { crm: true }, async (req, res, { params }) => {
+    const m = await store.getMedia(Number(params.id));
+    if (!m) throw new HttpError(404, 'Not found');
+    if (m.removed_at) return send(res, 200, { ok: true, already: true });
+    try { await engine.removeMedia([m]); } catch (e) { throw new HttpError(502, e.message); }
+    await store.addEvent(m.lead_id, 'photo_removed', { media: m.id, by: 'studio' });
+    send(res, 200, { ok: true });
   });
   route('GET', '/api/leads/:id', async (req, res, { params }) => {
     const lead = await store.getLead(Number(params.id));
@@ -479,7 +505,7 @@ function createHandler(app) {
     send(res, 200, { ok: true, result: await ig(() => instagram.setIceBreakers(settings.get().channels.ice_breakers)) });
   });
 
-  require('./websitecrm').mount({ route, send, readBody, limit, HttpError, store, settings, engine });
+  require('./websitecrm').mount({ route, send, readBody, limit, HttpError, store, settings, engine, config });
 
   // Simulator, scheduler, integrations
   route('POST', '/api/sim/run', async (req, res) => {
@@ -578,7 +604,7 @@ function createHandler(app) {
         if (r.method !== req.method) continue;
         const m = url.pathname.match(r.rx);
         if (!m) continue;
-        if (!r.public && !isAdmin(req)) return send(res, 401, { error: 'Not signed in' });
+        if (!r.public && !isAdmin(req) && !(r.crm && isCrm(req))) return send(res, 401, { error: 'Not signed in' });
         await settings.refresh(); // other instances may have changed the settings
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         return await r.handler(req, res, { params, query: url.searchParams });

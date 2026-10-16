@@ -59,6 +59,7 @@ class Scheduler {
         try { await this.execute(lead, p, result, { force }); } catch (e) { this.log.error('[scheduler] follow-up failed for lead', lead.id, e); }
       }
 
+      try { result.photos_removed = await this.purgePhotos(); } catch (e) { this.log.warn('[retention] photo clean-up failed:', e.message); }
       const hook = await deliverWebhooks(this.store, this.settings, { log: this.log });
       result.webhooks = hook.sent;
       if (this.instagram && this.instagram.enabled) await this.instagram.refreshToken().catch(() => {});
@@ -66,6 +67,19 @@ class Scheduler {
       this.busy = false;
     }
     return result;
+  }
+
+  // Photo retention: delete photos older than the configured number of days. Looks at most every 6 hours.
+  async purgePhotos() {
+    const days = this.settings.get().retention.photo_days;
+    if (!days) return 0;
+    const last = await this.store.kvGet('photo_purge_at', 0);
+    if (Date.now() - last < 6 * 3600000) return 0;
+    const rows = await this.store.expiredMedia(Date.now() - days * 86400000, 100);
+    let removed = 0;
+    if (rows.length) removed = await this.engine.removeMedia(rows);
+    if (rows.length < 100) await this.store.kvSet('photo_purge_at', Date.now()); // more to do? run again next tick
+    return removed;
   }
 
   claimOf(lead) { return { fu_step: lead.fu_step || 0, last_inbound_at: lead.last_inbound_at || 0 }; }

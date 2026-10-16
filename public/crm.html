@@ -1,237 +1,117 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Interio Arty: Lead Inbox</title>
-<link rel="stylesheet" href="/crm-assets/style.css?v=7" />
-<style>
-  body { cursor: default; background: var(--ink); color: var(--vellum); }
-  .crm-wrap { max-width: 1080px; margin: 0 auto; padding: 150px 6vw 120px; }
-
-  .crm-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--sp-4); border-bottom: 1px solid var(--line-on-ink); padding-bottom: var(--sp-3); }
-  .crm-head h1 { font-family: var(--sans); font-weight: 700; font-size: var(--t-h1); }
-  .crm-head p { color: rgba(255,255,255,0.5); margin-top: var(--sp-1); font-family: var(--mono); font-size: 0.78rem; }
-  .live-pill { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: var(--t-label); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.6); }
-  .live-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.6s infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-  .stats-row { display: flex; gap: var(--sp-5); margin-bottom: var(--sp-4); }
-  .stat b { display: block; font-family: var(--sans); font-size: 1.8rem; font-weight: 700; }
-  .stat span { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.45); }
-
-  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-3); gap: var(--sp-2); flex-wrap: wrap; }
-  .filters { display: flex; gap: 8px; }
-  .filter-btn {
-    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase;
-    background: none; border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.55);
-    padding: 8px 14px; cursor: pointer; transition: all 0.3s var(--ease);
-  }
-  .filter-btn:hover { border-color: rgba(255,255,255,0.6); color: var(--vellum); }
-  .filter-btn.active { background: var(--vellum); color: var(--ink); border-color: var(--vellum); }
-  .export-btn {
-    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase;
-    background: none; border-bottom: 1px solid rgba(255,255,255,0.5); color: var(--vellum);
-    padding: 6px 0; cursor: pointer;
-  }
-  .export-btn { white-space: nowrap; }
-  .export-btn:hover { border-bottom-color: var(--vellum); }
-
-  .lead-card { border-top: 1px solid var(--line-on-ink); opacity: 0; transform: translateY(-8px); animation: dropin 0.6s ease forwards; }
-  .lead-list .lead-card:last-child { border-bottom: 1px solid var(--line-on-ink); }
-  @keyframes dropin { to { opacity: 1; transform: translateY(0); } }
-
-  .lead-row {
-    padding: var(--sp-3) 0; display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr auto auto;
-    gap: var(--sp-2); align-items: center; cursor: pointer;
-  }
-  .lead-field label { display: block; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 5px; }
-  .lead-field span { font-size: 0.92rem; font-weight: 300; }
-  .lead-badge { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255,255,255,0.55); white-space: nowrap; }
-  .lead-badge.pending { color: rgba(255,255,255,0.35); }
-  .lead-chevron { font-family: var(--mono); color: rgba(255,255,255,0.4); transition: transform 0.4s var(--ease); }
-  .lead-card.open .lead-chevron { transform: rotate(90deg); }
-
-  .lead-detail { max-height: 0; overflow: hidden; transition: max-height 0.6s var(--ease); }
-  .lead-card.open .lead-detail { max-height: 1100px; }
-  .lead-detail-inner { padding: 0 0 var(--sp-3); display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
-
-  .detail-block label { display: block; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
-  .detail-block .summary-text { font-family: var(--sans); font-weight: 300; font-size: 1.05rem; line-height: 1.5; color: var(--vellum); }
-  .detail-specs { margin-top: var(--sp-3); display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
-  .detail-specs .dim { color: rgba(255,255,255,0.55); }
-  .detail-specs .dim::before { background: rgba(255,255,255,0.55); }
-
-  .lead-actions { display: flex; align-items: center; gap: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid rgba(255,255,255,0.12); }
-  .status-pill { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 10px; border: 1px solid rgba(255,255,255,0.35); color: rgba(255,255,255,0.6); }
-  .status-pill.status-contacted { border-color: rgba(255,255,255,0.6); color: var(--vellum); }
-  .status-pill.status-closed { opacity: 0.4; text-decoration: line-through; }
-  .action-btn {
-    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase;
-    background: none; border: 1px solid rgba(255,255,255,0.35); color: var(--vellum);
-    padding: 5px 10px; cursor: pointer; text-decoration: none; display: inline-block;
-    transition: all 0.3s var(--ease);
-  }
-  .action-btn:hover { background: var(--vellum); color: var(--ink); border-color: var(--vellum); }
-
-  .transcript { max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 8px; }
-  .t-msg { font-size: 0.84rem; font-weight: 300; line-height: 1.5; padding: 8px 12px; }
-  .t-msg.user { background: rgba(255,255,255,0.08); }
-  .t-msg.bot { background: transparent; border: 1px solid var(--line-on-ink); }
-  /* a photo the customer sent: shown large, whole (never cropped), click for full screen */
-  .t-img { display: block; width: 100%; max-width: 520px; height: auto; max-height: 520px; object-fit: contain; background: rgba(0,0,0,0.25); border: 1px solid var(--line-on-ink); margin-bottom: 8px; cursor: zoom-in; }
-  .t-cap { display: block; font-size: 0.8rem; line-height: 1.45; color: rgba(255,255,255,0.55); font-style: italic; }
-  .lightbox { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; background: rgba(10,10,10,0.94); cursor: zoom-out; }
-  .lightbox.show { display: flex; }
-  .lightbox img { max-width: 94vw; max-height: 90vh; object-fit: contain; box-shadow: 0 20px 80px rgba(0,0,0,0.6); }
-  .lightbox .lb-bar { position: fixed; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: linear-gradient(rgba(10,10,10,0.9), rgba(10,10,10,0)); cursor: default; }
-  .lb-grow { flex: 1; }
-  .lb-btn { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase; background: rgba(10,10,10,0.6); border: 1px solid rgba(255,255,255,0.4); color: var(--vellum); padding: 8px 14px; cursor: pointer; text-decoration: none; }
-  .lb-btn:hover { background: var(--vellum); color: var(--ink); }
-  .lb-danger { border-color: rgba(232,160,160,0.6); color: #e8a0a0; }
-  .lb-danger:hover { background: #e8a0a0; color: var(--ink); }
-  .t-gone { display: block; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.4); border: 1px dashed rgba(255,255,255,0.25); padding: 22px 12px; text-align: center; margin-bottom: 8px; }
-  .t-role { display: block; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
-
-  .empty-state { text-align: center; padding: var(--sp-6) 20px; color: rgba(255,255,255,0.4); border-top: 1px solid var(--line-on-ink); }
-  .empty-state b { display: block; font-family: var(--sans); font-weight: 700; font-size: 1.4rem; color: var(--vellum); margin-bottom: 10px; }
-  .toast { position: fixed; top: 24px; right: 24px; background: var(--vellum); color: var(--ink); padding: 14px 20px; font-family: var(--mono); font-size: 0.78rem; transform: translateX(140%); transition: transform 0.6s var(--ease); z-index: 300; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
-  .toast.show { transform: translateX(0); }
-
-  /* storage meter */
-  .meters { display: flex; align-items: flex-end; gap: var(--sp-4); flex-wrap: wrap; margin: -8px 0 var(--sp-3); padding: 18px 0; border-top: 1px solid var(--line-on-ink); border-bottom: 1px solid var(--line-on-ink); }
-  .meter { flex: 1 1 260px; min-width: 0; }
-  .meter .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 9px; }
-  .meter label { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.45); }
-  .meter .bar { width: 100%; height: 5px; background: rgba(255,255,255,0.12); position: relative; }
-  .meter .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,0.75); transition: width 0.6s var(--ease), background 0.3s; }
-  .meter .bar i.warn { background: #e0b25a; }
-  .meter .bar i.full { background: #e8a0a0; }
-  .meter span { font-family: var(--mono); font-size: 0.72rem; color: rgba(255,255,255,0.7); text-align: right; }
-
-  /* ticking leads */
-  .pick { display: inline-flex; align-items: center; gap: 9px; }
-  .pick input { accent-color: #f2efe8; width: 15px; height: 15px; cursor: pointer; flex: none; }
-  .bulkbar { display: none; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; margin-bottom: var(--sp-2); background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.2); font-family: var(--mono); font-size: 0.72rem; }
-  .bulkbar.show { display: flex; }
-  .bulkbar .grow { flex: 1; }
-  .action-btn.danger { border-color: rgba(232,160,160,0.55); color: #e8a0a0; }
-  .action-btn.danger:hover { background: #e8a0a0; color: var(--ink); border-color: #e8a0a0; }
-  .action-btn[disabled] { opacity: 0.35; pointer-events: none; }
-
-  /* clean-up panel */
-  .modal { position: fixed; inset: 0; z-index: 55; display: none; align-items: center; justify-content: center; background: rgba(10,10,10,0.82); padding: 20px; }
-  .modal.show { display: flex; }
-  .panel { width: min(560px, 100%); max-height: 92vh; overflow-y: auto; background: #1b1b1b; border: 1px solid rgba(255,255,255,0.22); padding: 28px; display: flex; flex-direction: column; gap: 18px; }
-  .panel h2 { font-family: var(--sans); font-weight: 700; font-size: 1.5rem; }
-  .panel p { color: rgba(255,255,255,0.55); font-size: 0.9rem; line-height: 1.5; font-weight: 300; }
-  .opt { display: flex; flex-direction: column; gap: 8px; }
-  .opt > label { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.45); }
-  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
-  .seg button { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; background: none; border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.6); padding: 9px 13px; cursor: pointer; }
-  .seg button.on { background: var(--vellum); color: var(--ink); border-color: var(--vellum); }
-  .panel select { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: var(--vellum); padding: 10px 12px; font-family: var(--mono); font-size: 0.74rem; width: 100%; }
-  .panel select option { background: #1b1b1b; }
-  .preview { border-left: 2px solid rgba(255,255,255,0.35); padding: 4px 0 4px 14px; font-size: 0.95rem; line-height: 1.5; min-height: 3em; color: var(--vellum); }
-  .preview.warn { border-left-color: #e8a0a0; }
-  .panel .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .panel .row .grow { flex: 1; }
-  .panel hr { border: 0; border-top: 1px solid rgba(255,255,255,0.12); width: 100%; }
-  .lead-badge.channel { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.25); padding: 4px 8px; white-space: nowrap; }
-  .login-wrap { position: fixed; inset: 0; background: var(--ink); display: flex; align-items: center; justify-content: center; z-index: 50; }
-  .login-box { display: flex; flex-direction: column; gap: 14px; width: min(340px, 86vw); }
-  .login-box b { font-family: var(--sans); font-weight: 700; font-size: 1.6rem; }
-  .login-box span { color: rgba(255,255,255,0.5); font-family: var(--mono); font-size: 0.74rem; }
-  .login-box input { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: var(--vellum); padding: 12px 14px; font-size: 0.95rem; outline: none; }
-  .login-box input:focus { border-color: var(--vellum); }
-  .login-box em { color: #e8a0a0; font-style: normal; font-family: var(--mono); font-size: 0.72rem; min-height: 1em; }
-
-  @media (max-width: 800px) {
-    .lead-row { grid-template-columns: 1fr 1fr auto; }
-    .lead-row .lead-field:nth-child(3), .lead-row .lead-field:nth-child(4) { display: none; }
-    .lead-detail-inner { grid-template-columns: 1fr; }
-  }
-</style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Interio Arty · Lead Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="/crm-assets/crm.css?v=13" />
 </head>
 <body>
-<div class="grain"></div>
-<div class="crm-wrap">
-  <div class="crm-head">
-    <div>
-      <h1 class="serif">Lead Inbox</h1>
-      <p>Every enquiry from Instagram and the website chatbot, summarised by AI and landing here in real time.</p>
-    </div>
-    <div class="live-pill"><span class="dot"></span> Live <button class="export-btn" id="signOut" type="button" style="margin-left:16px">Sign out</button></div>
-  </div>
 
-  <div class="stats-row">
-    <div class="stat"><b id="statTotal">0</b><span>Total Leads</span></div>
-    <div class="stat"><b id="statToday">0</b><span>Today</span></div>
-    <div class="stat"><b id="statPending">0</b><span>To Contact</span></div>
-    <div class="stat"><b>&lt; 1 min</b><span>Avg. Reply Time</span></div>
-  </div>
-
-  <div class="meters" id="meters">
-    <div class="meter"><div class="top"><label>Photos</label><span id="txtPhotos">...</span></div><div class="bar"><i id="barPhotos" style="width:0"></i></div></div>
-    <div class="meter"><div class="top"><label>Database</label><span id="txtDb">...</span></div><div class="bar"><i id="barDb" style="width:0"></i></div></div>
-    <button class="export-btn" id="openCleanup" type="button">Clean up</button>
-  </div>
-
-  <div class="toolbar">
-    <div class="filters">
-      <button class="filter-btn active" data-filter="all">All</button>
-      <button class="filter-btn" data-filter="new">New</button>
-      <button class="filter-btn" data-filter="contacted">Contacted</button>
-      <button class="filter-btn" data-filter="closed">Closed</button>
-      <button class="filter-btn" id="selectAll" type="button">Select all</button>
-    </div>
-    <button class="export-btn" id="exportCsv">Export CSV</button>
-  </div>
-
-  <div class="bulkbar" id="bulkbar"><span id="bulkCount">0 selected</span><span class="grow"></span><button class="action-btn" id="bulkPhotos" type="button">Delete photos only</button><button class="action-btn danger" id="bulkLeads" type="button">Delete leads</button><button class="action-btn" id="bulkClear" type="button">Clear</button></div>
-
-  <div id="leadList" class="lead-list"></div>
+<div id="login" class="login">
+  <form id="loginForm" class="card login-card" autocomplete="on">
+    <div class="mark">IA</div>
+    <h1>Lead Inbox</h1>
+    <p>Sign in to see your enquiries.</p>
+    <input id="pw" class="field" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password" required />
+    <button class="btn primary" type="submit">Sign in</button>
+    <em id="loginErr" role="alert"></em>
+  </form>
 </div>
 
-<div class="lightbox" id="lightbox">
+<header class="topbar">
+  <div class="brand">
+    <div class="mark">IA</div>
+    <div><b>Interio Arty</b><small>Lead Inbox</small></div>
+  </div>
+  <div class="top-actions">
+    <span class="live"><i></i>Live</span>
+    <button class="btn sm" id="exportCsv" type="button" title="Download all leads as a spreadsheet"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg><span class="lbl">Export</span></button>
+    <button class="btn sm" id="openCleanup" type="button" title="Storage and clean up"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg><span class="lbl">Clean up</span></button>
+    <button class="btn sm plain" id="signOut" type="button" title="Sign out"><svg class="i" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 8l-4 4 4 4M6 12h10"/></svg><span class="lbl">Sign out</span></button>
+  </div>
+</header>
+
+<main class="page">
+  <section class="stats" aria-label="Summary">
+    <div class="card stat"><b id="statTotal">0</b><span>Total leads</span></div>
+    <div class="card stat"><b id="statWeek">0</b><span>This week</span></div>
+    <div class="card stat"><b id="statNew">0</b><span>To contact</span></div>
+    <div class="card storage" aria-label="Storage">
+      <div class="meter"><div class="top"><label>Photos</label><span id="txtPhotos">...</span></div><div class="bar"><i id="barPhotos"></i></div></div>
+      <div class="meter"><div class="top"><label>Database</label><span id="txtDb">...</span></div><div class="bar"><i id="barDb"></i></div></div>
+    </div>
+  </section>
+
+  <div class="split" id="split">
+    <section class="card list-card" id="listCard">
+      <div class="controls">
+        <div class="search">
+          <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+          <input id="search" class="field" type="search" placeholder="Search leads" aria-label="Search leads" autocomplete="off" />
+        </div>
+        <div class="controls-row">
+          <div class="seg" id="filters" role="tablist" aria-label="Filter leads"></div>
+          <button class="btn sm plain" id="selectToggle" type="button">Select</button>
+        </div>
+      </div>
+      <div id="leadList" class="leads" role="list"></div>
+      <div class="bulkbar" id="bulkbar">
+        <span class="grow" id="bulkCount">0 selected</span>
+        <button class="btn sm" id="bulkPhotos" type="button">Delete photos</button>
+        <button class="btn sm danger" id="bulkLeads" type="button">Delete leads</button>
+      </div>
+    </section>
+
+    <aside class="card detail" id="detail" aria-live="polite">
+      <div class="detail-bar"><button class="btn plain" id="backBtn" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Leads</button></div>
+      <div id="detailBody"></div>
+    </aside>
+  </div>
+</main>
+
+<div id="lightbox" class="overlay lightbox">
   <div class="lb-bar">
-    <button class="lb-btn" id="lbBack" type="button">&larr; Back to chat</button>
-    <span class="lb-grow"></span>
-    <a class="lb-btn" id="lbDownload" download>Download</a>
-    <button class="lb-btn lb-danger" id="lbDelete" type="button">Delete photo</button>
+    <button class="lb-btn" id="lbBack" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Back</button>
+    <span class="grow"></span>
+    <a class="lb-btn" id="lbDownload" download><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>Download</a>
+    <button class="lb-btn danger" id="lbDelete" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Delete</button>
   </div>
   <img id="lbImg" alt="Photo sent by the customer" />
 </div>
 
-<div class="modal" id="cleanup">
-  <div class="panel">
-    <h2>Clean up</h2>
-    <p>Free up space by removing old photos or whole leads. Closed leads are the usual choice. You can download a spreadsheet of everything first.</p>
-    <div class="opt"><label>Remove</label><div class="seg" id="optScope"><button type="button" data-v="photos" class="on">Photos only</button><button type="button" data-v="leads">Whole leads</button></div></div>
-    <div class="opt"><label>Older than</label><div class="seg" id="optDays"><button type="button" data-v="30">30 days</button><button type="button" data-v="90" class="on">90 days</button><button type="button" data-v="180">6 months</button><button type="button" data-v="365">1 year</button></div></div>
-    <div class="opt"><label>Which leads</label><div class="seg" id="optStatus"><button type="button" data-v="closed" class="on">Closed only</button><button type="button" data-v="any">All statuses</button></div></div>
+<div id="cleanup" class="overlay sheet-wrap" role="dialog" aria-modal="true" aria-label="Storage and clean up">
+  <div class="sheet">
+    <div>
+      <h2>Clean up</h2>
+      <p>Free up space by removing old photos or whole leads. Closed leads are the usual choice. You can download a spreadsheet of everything first.</p>
+    </div>
+    <div class="opt"><label>Remove</label><div class="seg wide" id="optScope"><button type="button" data-v="photos" class="on">Photos only</button><button type="button" data-v="leads">Whole leads</button></div></div>
+    <div class="opt"><label>Older than</label><div class="seg wide" id="optDays"><button type="button" data-v="30">30 days</button><button type="button" data-v="90" class="on">90 days</button><button type="button" data-v="180">6 months</button><button type="button" data-v="365">1 year</button></div></div>
+    <div class="opt"><label>Which leads</label><div class="seg wide" id="optStatus"><button type="button" data-v="closed" class="on">Closed only</button><button type="button" data-v="any">All statuses</button></div></div>
     <div class="preview" id="cleanupPreview">Checking...</div>
-    <div class="row"><button class="action-btn" id="cleanupCsv" type="button">Download CSV first</button><span class="grow"></span><button class="action-btn" id="cleanupCancel" type="button">Cancel</button><button class="action-btn danger" id="cleanupGo" type="button" disabled>Remove</button></div>
+    <div class="row-btns">
+      <button class="btn sm" id="cleanupCsv" type="button">Download CSV first</button>
+      <span class="grow"></span>
+      <button class="btn sm" id="cleanupCancel" type="button">Cancel</button>
+      <button class="btn sm primary" id="cleanupGo" type="button" disabled>Remove</button>
+    </div>
     <hr />
-    <div class="opt"><label>Delete photos automatically after</label>
-      <select id="retention"><option value="0">Never</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="180">6 months</option><option value="365">1 year</option></select>
+    <div class="opt"><label for="retention">Delete photos automatically after</label>
+      <select id="retention" class="field"><option value="0">Never</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="180">6 months</option><option value="365">1 year</option></select>
     </div>
   </div>
 </div>
 
-<div class="toast" id="toast">New lead received</div>
+<div class="toast" id="toast" role="status"></div>
 
-<div id="login" class="login-wrap" style="display:none">
-  <form id="loginForm" class="login-box">
-    <b>Lead Inbox</b>
-    <span>Sign in to see your leads.</span>
-    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" />
-    <button class="action-btn" type="submit">Sign in</button>
-    <em id="loginErr"></em>
-  </form>
-</div>
-
-<script src="/crm-assets/crm.js?v=8"></script>
+<script src="/crm-assets/crm.js?v=13"></script>
 </body>
 </html>

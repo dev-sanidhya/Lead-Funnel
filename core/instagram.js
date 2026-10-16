@@ -18,7 +18,7 @@ const WINDOW_MS = 24 * 3600 * 1000;
 const HUMAN_AGENT_MS = 7 * 24 * 3600 * 1000;
 const MAX_TEXT = 950;
 const IMAGE_HOSTS = /(^|\.)(fbsbx\.com|cdninstagram\.com|fbcdn\.net|instagram\.com)$/i;
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // Vercel returns at most about 4.5 MB per response, so anything bigger could never be shown
 // Attachments a customer really sent (as opposed to empty companion events, hearts and the like).
 const MEDIA = { image: 'a photo', video: 'a video', audio: 'a voice note', file: 'a file', share: 'a post', ig_reel: 'a reel', reel: 'a reel', story_mention: 'a story', ig_story: 'a story' }; // under the 1000 character limit, with headroom for multibyte text
 
@@ -180,7 +180,7 @@ class Instagram {
     return last && last.message_id;
   }
 
-  // Downloads a picture the customer sent. Only Meta's own image hosts are fetched, and only images up to 8 MB.
+  // Downloads a picture the customer sent. Only Meta's own image hosts are fetched, and only images up to 4 MB.
   async fetchImage(url) {
     let u;
     try { u = new URL(url); } catch { return null; }

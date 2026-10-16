@@ -216,6 +216,14 @@ function createHandler(app) {
   route('GET', '/form', { public: true }, async (req, res) => send(res, 200, page('form.html')()));
   route('GET', '/admin', { public: true }, async (req, res) => send(res, 200, page('admin.html')()));
   route('GET', '/privacy', { public: true }, async (req, res) => send(res, 200, page('privacy.html')()));
+  // The studio's Lead Inbox page (the website CRM) and its two assets
+  route('GET', '/crm', { public: true }, async (req, res) => send(res, 200, page('crm.html')()));
+  route('GET', '/crm-assets/:file', { public: true }, async (req, res, { params }) => {
+    const types = { 'style.css': 'text/css; charset=utf-8', 'crm.js': 'application/javascript; charset=utf-8' };
+    if (!types[params.file]) throw new HttpError(404, 'Not found');
+    res.writeHead(200, { 'Content-Type': types[params.file], 'Cache-Control': 'public, max-age=300' });
+    res.end(fs.readFileSync(path.join(PUBLIC, 'crm-assets', params.file)));
+  });
 
   // Public API
   route('GET', '/api/health', { public: true }, async (req, res) => {
@@ -455,6 +463,8 @@ function createHandler(app) {
     send(res, 200, { ok: true, result: await ig(() => instagram.setIceBreakers(settings.get().channels.ice_breakers)) });
   });
 
+  require('./websitecrm').mount({ route, send, readBody, limit, HttpError, store, settings, engine });
+
   // Simulator, scheduler, integrations
   route('POST', '/api/sim/run', async (req, res) => {
     const b = await readBody(req);
@@ -544,10 +554,10 @@ function createHandler(app) {
     const url = new URL(req.url, 'http://localhost');
     try {
       if (req.method === 'OPTIONS') {
-        res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET', 'Access-Control-Allow-Headers': 'Content-Type, X-Intake-Secret' });
+        res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET', 'Access-Control-Allow-Headers': 'Content-Type, X-Intake-Secret, X-Site-Key' });
         return res.end();
       }
-      if (url.pathname === '/api/intake' || url.pathname === '/api/public-config') res.setHeader('Access-Control-Allow-Origin', '*');
+      if (url.pathname === '/api/intake' || url.pathname === '/api/public-config' || url.pathname === '/api/crm/ingest') res.setHeader('Access-Control-Allow-Origin', '*');
       for (const r of routes) {
         if (r.method !== req.method) continue;
         const m = url.pathname.match(r.rx);

@@ -91,6 +91,9 @@ function directiveBody(d, ctx) {
   const money = (n) => formatMoney(n, q.currency);
   switch (d.type) {
     case 'GREET':
+      if (settings.agent.polish) {
+        return `This is your FIRST message to ${lead.name || 'them'}. Write it like a person at a design studio: greet them by first name, one short welcome line${lead.city || lead.project_type ? ` that shows you noticed what they said (${[lead.project_type, lead.city].filter(Boolean).join(' in ')})` : ''}, say who you are in a few words, then ask naturally: ${FIELD_ASK_HINT[d.field] || 'how you can help'}. At most two or three short sentences. Do not say you have "a couple of quick questions" and do not mention matching them with anyone.`;
+      }
       return `This is your FIRST message to ${lead.name || 'them'}. Greet them by first name, thank them for their enquiry${lead.city || lead.project_type ? ` (they mentioned ${[lead.project_type, lead.city].filter(Boolean).join(' in ')})` : ''}, introduce yourself in one short clause, and say you have a couple of quick questions to match them with the right designer. Then ask, naturally: ${FIELD_ASK_HINT[d.field] || 'how you can help'}. Keep the whole message to 2 or 3 sentences and do not list examples.`;
     case 'ASK': {
       const soft = d.hesitated ? ' They hesitated or dodged this last time, so reassure them lightly that a rough ballpark is enough and it only helps match the right designer, without pressuring.' : '';
@@ -130,10 +133,10 @@ function directiveBody(d, ctx) {
 }
 
 const emojiRule = (a) => (a.emojis === 'light'
-  ? 'Emojis: use ONE small, tasteful emoji in most messages (two at the very most), where a thoughtful person would: after a warm greeting or at the end of a friendly sentence, never mid-sentence, never in a row, never in lists. Choose only from ✨ 🏡 🛋️ 📐 🎨 🌿 🙌 😊 🤍, vary them from message to message, and use none when you are declining, apologising or dealing with a worry.'
+  ? 'Emojis: use ONE small, tasteful emoji in most messages (two at the very most), the way a thoughtful person texts. Place it where it feels natural and vary the spot: after the greeting or first clause in the middle of the message (for example "Welcome to Interio Arty ✨ I am Arty."), after a warm sentence, or at the very end. Do not put it at the end every time. Never replace a word with one, never stack them, never put them in lists. Choose only from ✨ 🏡 🛋️ 📐 🎨 🌿 🙌 😊 🤍, vary them from message to message, and use none when you are declining, apologising or dealing with a worry.'
   : 'No emojis unless the customer used them first.');
 const polishRule = (a) => (a.polish
-  ? "\nWRITING STANDARD (this is a premium studio, the reader must never feel they are talking to a template):\n- Open with substance, never with filler like \"Absolutely\", \"Certainly\", \"Great question\" or \"Of course\".\n- Be specific: use one concrete detail the customer gave (their space, area, style, timing) in every reply.\n- Calm, confident and concise: two or three sentences, at most one exclamation mark.\n- Avoid stock phrases: \"I'm here to help\", \"don't hesitate\", \"feel free\", \"I'd be happy to assist\", \"seamless\", \"elevate\", \"unlock\", \"world-class\", \"journey\".\n- Sound like a person at a design studio, not a brochure.\n"
+  ? "\nWRITING STANDARD (this is a premium studio, the reader must never feel they are talking to a template):\n- Open with substance, never with filler like \"Absolutely\", \"Certainly\", \"Great question\" or \"Of course\".\n- Be specific: use one concrete detail the customer gave (their space, area, style, timing) in every reply.\n- Calm, confident and concise: two or three sentences, at most one exclamation mark.\n- Avoid stock phrases: \"I'm here to help\", \"don't hesitate\", \"feel free\", \"I'd be happy to assist\", \"seamless\", \"elevate\", \"unlock\", \"world-class\", \"journey\".\n- Sound like a person at a design studio, not a brochure.\n- Do not praise generically (\"great space\", \"beautiful and functional\", \"cozy and inviting\", \"sounds wonderful\"). When they share a taste or a detail, answer with one concrete design thought instead: a material, a light, a layout or a timing insight that is true and useful.\n- Never open with \"We'd be happy to\" or \"I'd love to\". Say what you will do.\n- Prefer short sentences and full stops over long chains joined by commas.\n"
   : '');
 
 function replySystem(directive, ctx) {

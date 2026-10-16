@@ -67,6 +67,7 @@ const emojisIn = (text) => (String(text).match(EMOJI_RX) || []);
 function tidyEmojis(text, { allowed = DEFAULT_EMOJIS, previous = '', max = 2, none = false } = {}) {
   const ok = new Set(allowed.map(baseEmoji));
   const lastUsed = new Set(emojisIn(previous).map(baseEmoji));
+  if (lastUsed.size) none = true; // an emoji in every message reads as a template: after one that had one, the next goes plain
   let kept = 0;
   const usedHere = new Set();
   const perSentence = String(text).split(/(?<=[.!?])\s+/).map((sentence) => {
@@ -83,7 +84,7 @@ function tidyEmojis(text, { allowed = DEFAULT_EMOJIS, previous = '', max = 2, no
 
 // ---- stock chatbot phrasing ----
 const FILLER_OPENER = /^\s*(?:absolutely|certainly|of course|definitely|sure thing|sure|great question|good question|great choice|wonderful|fantastic|awesome|no problem at all)\s*[!,.:-]+\s*/i;
-const STOCK = /(i hope (this|you)|hope this message finds|don'?t hesitate|do not hesitate|delve|tapestry|elevate your|game[- ]changer|unlock (the|your)|seamless(ly)?|cutting[- ]edge|state[- ]of[- ]the[- ]art|i'?m here to help|happy to assist|i'?d be (happy|glad|delighted) to (help|assist)|rest assured|world[- ]class|bespoke journey|as an ai)/i;
+const STOCK = /(i hope (this|you)|hope this message finds|don'?t hesitate|do not hesitate|delve|tapestry|elevate your|game[- ]changer|unlock (the|your)|seamless(ly)?|cutting[- ]edge|state[- ]of[- ]the[- ]art|i'?m here to help|happy to assist|i'?d be (happy|glad|delighted) to (help|assist)|rest assured|world[- ]class|bespoke journey|as an ai|cozy and inviting|warm and inviting|beautiful and functional|beautiful (and|,) (functional|practical)|can already imagine|imagine the possibilities|a lot of options for creating|perfect (fit|blend)|sounds (like )?(a )?(great|wonderful|amazing|fantastic|lovely) (space|home|project|idea|choice|plan))/i;
 
 function polish(text) {
   let t = String(text).replace(FILLER_OPENER, '');

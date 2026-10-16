@@ -79,7 +79,7 @@ function plan(lead, settings, now = Date.now(), { includeDemo = false } = {}) {
   const meta = lead.meta || {};
   const fu = meta.fu || {};
   const flags = meta.flags || {};
-  if (lead.channel === 'sim' || lead.opted_out) return null;
+  if (lead.channel === 'sim' || lead.channel === 'web' || lead.opted_out) return null; // website-chatbot leads arrive finished: there is no chat to follow up in
   if (meta.demo && !includeDemo) return null;
   if (fu.snooze_until && fu.snooze_until > now) return null;
   const out = [];

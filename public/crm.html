@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Interio Arty: Lead Inbox</title>
+<link rel="stylesheet" href="/crm-assets/style.css" />
+<style>
+  body { cursor: default; background: var(--ink); color: var(--vellum); }
+  .crm-wrap { max-width: 1080px; margin: 0 auto; padding: 150px 6vw 120px; }
+
+  .crm-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--sp-4); border-bottom: 1px solid var(--line-on-ink); padding-bottom: var(--sp-3); }
+  .crm-head h1 { font-family: var(--sans); font-weight: 700; font-size: var(--t-h1); }
+  .crm-head p { color: rgba(255,255,255,0.5); margin-top: var(--sp-1); font-family: var(--mono); font-size: 0.78rem; }
+  .live-pill { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: var(--t-label); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.6); }
+  .live-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .stats-row { display: flex; gap: var(--sp-5); margin-bottom: var(--sp-4); }
+  .stat b { display: block; font-family: var(--sans); font-size: 1.8rem; font-weight: 700; }
+  .stat span { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.45); }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-3); gap: var(--sp-2); flex-wrap: wrap; }
+  .filters { display: flex; gap: 8px; }
+  .filter-btn {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase;
+    background: none; border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.55);
+    padding: 8px 14px; cursor: pointer; transition: all 0.3s var(--ease);
+  }
+  .filter-btn:hover { border-color: rgba(255,255,255,0.6); color: var(--vellum); }
+  .filter-btn.active { background: var(--vellum); color: var(--ink); border-color: var(--vellum); }
+  .export-btn {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase;
+    background: none; border-bottom: 1px solid rgba(255,255,255,0.5); color: var(--vellum);
+    padding: 6px 0; cursor: pointer;
+  }
+  .export-btn:hover { border-bottom-color: var(--vellum); }
+
+  .lead-card { border-top: 1px solid var(--line-on-ink); opacity: 0; transform: translateY(-8px); animation: dropin 0.6s ease forwards; }
+  .lead-list .lead-card:last-child { border-bottom: 1px solid var(--line-on-ink); }
+  @keyframes dropin { to { opacity: 1; transform: translateY(0); } }
+
+  .lead-row {
+    padding: var(--sp-3) 0; display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr auto auto;
+    gap: var(--sp-2); align-items: center; cursor: pointer;
+  }
+  .lead-field label { display: block; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 5px; }
+  .lead-field span { font-size: 0.92rem; font-weight: 300; }
+  .lead-badge { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255,255,255,0.55); white-space: nowrap; }
+  .lead-badge.pending { color: rgba(255,255,255,0.35); }
+  .lead-chevron { font-family: var(--mono); color: rgba(255,255,255,0.4); transition: transform 0.4s var(--ease); }
+  .lead-card.open .lead-chevron { transform: rotate(90deg); }
+
+  .lead-detail { max-height: 0; overflow: hidden; transition: max-height 0.6s var(--ease); }
+  .lead-card.open .lead-detail { max-height: 1100px; }
+  .lead-detail-inner { padding: 0 0 var(--sp-3); display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+
+  .detail-block label { display: block; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+  .detail-block .summary-text { font-family: var(--sans); font-weight: 300; font-size: 1.05rem; line-height: 1.5; color: var(--vellum); }
+  .detail-specs { margin-top: var(--sp-3); display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+  .detail-specs .dim { color: rgba(255,255,255,0.55); }
+  .detail-specs .dim::before { background: rgba(255,255,255,0.55); }
+
+  .lead-actions { display: flex; align-items: center; gap: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid rgba(255,255,255,0.12); }
+  .status-pill { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 10px; border: 1px solid rgba(255,255,255,0.35); color: rgba(255,255,255,0.6); }
+  .status-pill.status-contacted { border-color: rgba(255,255,255,0.6); color: var(--vellum); }
+  .status-pill.status-closed { opacity: 0.4; text-decoration: line-through; }
+  .action-btn {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase;
+    background: none; border: 1px solid rgba(255,255,255,0.35); color: var(--vellum);
+    padding: 5px 10px; cursor: pointer; text-decoration: none; display: inline-block;
+    transition: all 0.3s var(--ease);
+  }
+  .action-btn:hover { background: var(--vellum); color: var(--ink); border-color: var(--vellum); }
+
+  .transcript { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 8px; }
+  .t-msg { font-size: 0.84rem; font-weight: 300; line-height: 1.5; padding: 8px 12px; }
+  .t-msg.user { background: rgba(255,255,255,0.08); }
+  .t-msg.bot { background: transparent; border: 1px solid var(--line-on-ink); }
+  .t-role { display: block; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+
+  .empty-state { text-align: center; padding: var(--sp-6) 20px; color: rgba(255,255,255,0.4); border-top: 1px solid var(--line-on-ink); }
+  .empty-state b { display: block; font-family: var(--sans); font-weight: 700; font-size: 1.4rem; color: var(--vellum); margin-bottom: 10px; }
+  .toast { position: fixed; top: 24px; right: 24px; background: var(--vellum); color: var(--ink); padding: 14px 20px; font-family: var(--mono); font-size: 0.78rem; transform: translateX(140%); transition: transform 0.6s var(--ease); z-index: 300; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+  .toast.show { transform: translateX(0); }
+  .lead-badge.channel { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.25); padding: 4px 8px; white-space: nowrap; }
+  .login-wrap { position: fixed; inset: 0; background: var(--ink); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .login-box { display: flex; flex-direction: column; gap: 14px; width: min(340px, 86vw); }
+  .login-box b { font-family: var(--sans); font-weight: 700; font-size: 1.6rem; }
+  .login-box span { color: rgba(255,255,255,0.5); font-family: var(--mono); font-size: 0.74rem; }
+  .login-box input { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: var(--vellum); padding: 12px 14px; font-size: 0.95rem; outline: none; }
+  .login-box input:focus { border-color: var(--vellum); }
+  .login-box em { color: #e8a0a0; font-style: normal; font-family: var(--mono); font-size: 0.72rem; min-height: 1em; }
+
+  @media (max-width: 800px) {
+    .lead-row { grid-template-columns: 1fr 1fr auto; }
+    .lead-row .lead-field:nth-child(3), .lead-row .lead-field:nth-child(4) { display: none; }
+    .lead-detail-inner { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="crm-wrap">
+  <div class="crm-head">
+    <div>
+      <h1 class="serif">Lead Inbox</h1>
+      <p>Every enquiry from Instagram and the website chatbot, summarised by AI and landing here in real time.</p>
+    </div>
+    <div class="live-pill"><span class="dot"></span> Live</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><b id="statTotal">0</b><span>Total Leads</span></div>
+    <div class="stat"><b id="statToday">0</b><span>Today</span></div>
+    <div class="stat"><b id="statPending">0</b><span>To Contact</span></div>
+    <div class="stat"><b>&lt; 1 min</b><span>Avg. Reply Time</span></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="new">New</button>
+      <button class="filter-btn" data-filter="contacted">Contacted</button>
+      <button class="filter-btn" data-filter="closed">Closed</button>
+    </div>
+    <button class="export-btn" id="exportCsv">Export CSV</button>
+  </div>
+
+  <div id="leadList" class="lead-list"></div>
+</div>
+
+<div class="toast" id="toast">New lead received</div>
+
+<div id="login" class="login-wrap" style="display:none">
+  <form id="loginForm" class="login-box">
+    <b>Lead Inbox</b>
+    <span>Sign in to see your leads.</span>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" />
+    <button class="action-btn" type="submit">Sign in</button>
+    <em id="loginErr"></em>
+  </form>
+</div>
+
+<script src="/crm-assets/crm.js"></script>
+</body>
+</html>

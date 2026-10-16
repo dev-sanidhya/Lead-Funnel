@@ -15,9 +15,10 @@ test('light mode keeps at most two tasteful emojis, one per sentence, from the a
   assert.deepStrictEqual(emojisIn(light('A 🏡 thought. Another 🏡 thought. A third ✨ one. And 🎨 more.')), ['🏡', '✨']);
 });
 
-test('the same emoji is not used twice in a row, and declines carry none', () => {
+test('emojis come on about every other message, never two in a row, and declines carry none', () => {
   assert.strictEqual(light('Sounds lovely ✨', { previous: 'Welcome to Interio Arty ✨' }), 'Sounds lovely');
-  assert.strictEqual(light('Sounds lovely 🏡', { previous: 'Welcome to Interio Arty ✨' }), 'Sounds lovely 🏡');
+  assert.strictEqual(light('Sounds lovely 🏡', { previous: 'Welcome to Interio Arty ✨' }), 'Sounds lovely', 'the message after an emoji goes plain');
+  assert.strictEqual(light('Sounds lovely 🏡', { previous: 'Welcome to Interio Arty.' }), 'Sounds lovely 🏡');
   assert.strictEqual(light('Thank you for sharing, we cannot take this one on 🙏✨', { declining: true }), 'Thank you for sharing, we cannot take this one on');
 });
 
@@ -55,4 +56,9 @@ test('the prompt only invites emojis and the premium standard when the studio tu
   assert.match(seen[1], /ONE small, tasteful emoji/);
   assert.match(seen[1], /WRITING STANDARD/);
   assert.doesNotMatch(seen[1], /No emojis unless/);
+});
+
+test('design-brochure clichés are dropped so replies stay specific', () => {
+  assert.strictEqual(polish('Warm woods can create a really cozy and inviting atmosphere. Brass fittings pair well with them.'), 'Brass fittings pair well with them.');
+  assert.strictEqual(polish('That sounds like a wonderful space. With possession next month we can start straight away.'), 'With possession next month we can start straight away.');
 });

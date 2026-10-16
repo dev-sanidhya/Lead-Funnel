@@ -187,3 +187,18 @@ test('the front page goes to the inbox when a studio password exists', async () 
     assert.strictEqual(r.headers.get('location'), '/crm');
   } finally { server.close(); }
 });
+
+test('the privacy page speaks for the business that runs the deployment, never for anyone else', async () => {
+  const { app, server, base } = await boot();
+  try {
+    await app.settings.update({ business: { name: 'Interio Arty', contact_email: 'connect@interioarty.com' } });
+    let html = await (await fetch(`${base}/privacy`)).text();
+    assert.match(html, /Interio Arty uses an automated assistant/);
+    assert.match(html, /mailto:connect@interioarty\.com/);
+    assert.doesNotMatch(html, /Aperture|shishodiasanidhya|\{\{/);
+    await app.settings.update({ business: { name: 'A <b>bad</b> name', contact_email: 'not-an-email' } });
+    html = await (await fetch(`${base}/privacy`)).text();
+    assert.doesNotMatch(html, /<b>bad<\/b>/, 'the name is escaped');
+    assert.match(html, /please contact A &lt;b&gt;bad&lt;\/b&gt; name directly/, 'no email set: a neutral line, not a stranger\'s address');
+  } finally { server.close(); }
+});

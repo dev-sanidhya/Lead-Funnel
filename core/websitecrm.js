@@ -50,7 +50,7 @@ function toCrmLead(lead, messages, settings, media = new Map()) {
     call: lead.callback_at ? formatWhen(lead.callback_at, tz) : '',
     status: STATUSES.includes(lead.meta.crm_status) ? lead.meta.crm_status : 'new',
     time: new Date(lead.created_at).toISOString(),
-    transcript: messages.map((m) => ({ role: m.direction === 'in' ? 'user' : 'assistant', content: m.text, ...(pic(m) ? (pic(m).removed ? { removed: true } : { image: `/api/media/${pic(m).id}` }) : {}) })),
+    transcript: messages.map((m) => ({ role: m.direction === 'in' ? 'user' : 'assistant', content: m.text, at: m.created_at, ...(pic(m) ? (pic(m).removed ? { removed: true } : { image: `/api/media/${pic(m).id}` }) : {}) })),
     summarizing: false,
   };
 }
@@ -64,7 +64,7 @@ function mount({ route, send, readBody, limit, HttpError, store, settings, engin
     const byLead = new Map();
     if (ids.length) {
       // one query for all transcripts; the page shows the most recent 80 messages of each chat
-      const rows = await store.all(`SELECT id, lead_id, direction, text FROM messages WHERE lead_id IN (${ids.map(() => '?').join(',')}) ORDER BY id`, ...ids);
+      const rows = await store.all(`SELECT id, lead_id, direction, text, created_at FROM messages WHERE lead_id IN (${ids.map(() => '?').join(',')}) ORDER BY id`, ...ids);
       for (const m of rows) { if (!byLead.has(m.lead_id)) byLead.set(m.lead_id, []); byLead.get(m.lead_id).push(m); }
     }
     const media = await store.mediaState(ids);

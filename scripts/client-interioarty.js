@@ -12,6 +12,7 @@ const SETTINGS = {
   business: {
     name: 'Interio Arty',
     tagline: 'Creativity, Integrity, and Innovation',
+    contact_email: 'connect@interioarty.com',
     timezone: 'Asia/Kolkata',
     description: 'Interio Arty is a one-stop shop from design to execution: the same team that designs your space also handles the civil work, construction, finishing and installation, so you deal with one team for the entire project. Based in Viman Nagar, Pune, designing and executing homes, offices and commercial spaces.',
     services: [

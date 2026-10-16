@@ -5,7 +5,8 @@
 
 const DEFAULTS = {
   business: {
-    name: 'Aperture Interiors',
+    name: 'Your Business',
+    contact_email: '',
     tagline: 'Design to execution, under one roof',
     timezone: 'Asia/Kolkata',
     description: 'A premium interior design and execution studio for homes, offices and commercial spaces. We design, build and hand over turnkey projects.',
@@ -103,6 +104,7 @@ function sanitize(s) {
   q.project_types = listish(q.project_types);
   q.currency = String(q.currency || 'INR').toUpperCase().slice(0, 4);
   s.business.services = listish(s.business.services);
+  s.business.contact_email = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(String(s.business.contact_email || '').trim()) ? String(s.business.contact_email).trim() : '';
   const f = s.followups;
   f.enabled = !!f.enabled;
   for (const k of ['first_after_min', 'second_after_min', 'max', 'nurture_every_days', 'nurture_max', 'reminder_before_min', 'overdue_after_min', 'last_call_margin_min', 'stall_after_min', 'chat_nudge_after_min']) f[k] = Math.max(0, Number(f[k]) || 0);

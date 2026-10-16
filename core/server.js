@@ -228,11 +228,19 @@ function createHandler(app) {
   route('GET', '/', { public: true }, async (req, res) => { res.writeHead(302, { Location: config.crmPassword ? '/crm' : '/admin' }); res.end(); });
   route('GET', '/form', { public: true }, async (req, res) => send(res, 200, page('form.html')()));
   route('GET', '/admin', { public: true }, async (req, res) => send(res, 200, page('admin.html')()));
-  route('GET', '/privacy', { public: true }, async (req, res) => send(res, 200, page('privacy.html')()));
+  // The privacy policy is written in terms of whichever business runs this deployment.
+  const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  route('GET', '/privacy', { public: true }, async (req, res) => {
+    const b = settings.get().business;
+    const contact = b.contact_email
+      ? `Questions or deletion requests: <a href="mailto:${escHtml(b.contact_email)}">${escHtml(b.contact_email)}</a>.`
+      : `Questions or deletion requests: please contact ${escHtml(b.name)} directly, or message them in the chat you started.`;
+    send(res, 200, String(page('privacy.html')()).replace(/\{\{BUSINESS\}\}/g, escHtml(b.name)).replace('{{CONTACT_LINE}}', contact));
+  });
   // The studio's Lead Inbox page (the website CRM) and its two assets
   route('GET', '/crm', { public: true }, async (req, res) => send(res, 200, page('crm.html')()));
   route('GET', '/crm-assets/:file', { public: true }, async (req, res, { params }) => {
-    const types = { 'style.css': 'text/css; charset=utf-8', 'crm.js': 'application/javascript; charset=utf-8' };
+    const types = { 'crm.css': 'text/css; charset=utf-8', 'crm.js': 'application/javascript; charset=utf-8' };
     if (!types[params.file]) throw new HttpError(404, 'Not found');
     res.writeHead(200, { 'Content-Type': types[params.file], 'Cache-Control': 'public, max-age=300' });
     res.end(fs.readFileSync(path.join(PUBLIC, 'crm-assets', params.file)));

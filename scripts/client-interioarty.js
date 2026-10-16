@@ -52,7 +52,11 @@ const SETTINGS = {
   },
   qualification: {
     currency: 'INR',
-    min_budget: 300000, // placeholder until the studio confirms its smallest project
+    // The studio wants every conversation answered and recorded, so there is no qualification bar:
+    // no minimum budget, no "start within N months" cut-off, no borderline band. The stage is only a label.
+    min_budget: 0,
+    borderline_pct: 0,
+    active_within_months: 120,
     required: ['project_type', 'city', 'budget'],
     service_cities: [],
     project_types: ['Full home', 'Modular kitchen', 'Office', 'Renovation', 'Design only', 'Other'],
@@ -70,6 +74,6 @@ const SETTINGS = {
   await settings.refresh();
   await settings.update(SETTINGS);
   const s = settings.get();
-  console.log(`configured: ${s.business.name} | assistant ${s.agent.name} | emojis ${s.agent.emojis} | polish ${s.agent.polish} | min budget ${s.qualification.min_budget}`);
+  console.log(`configured: ${s.business.name} | assistant ${s.agent.name} | emojis ${s.agent.emojis} | polish ${s.agent.polish} | min budget ${s.qualification.min_budget} | timeline cut-off ${s.qualification.active_within_months} months`);
   await store.close();
 })().catch((e) => { console.error(e.message); process.exit(1); });

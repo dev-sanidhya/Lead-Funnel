@@ -32,6 +32,8 @@ module.exports = {
   // Postgres connection string (Supabase pooler). When set it replaces the local SQLite file.
   databaseUrl: env.DATABASE_URL || '',
   cronSecret: env.CRON_SECRET || '',
+  // Supabase Storage for customers' photos (see core/storage.js). Without it photos are kept in the database.
+  storage: { url: env.SUPABASE_URL || '', key: env.SUPABASE_ANON_KEY || '', bucket: env.STORAGE_BUCKET || '' },
   // Google service account (JSON) that books calls on the owner's calendar. See core/calendar.js.
   googleServiceAccount: (() => { try { return env.GOOGLE_SERVICE_ACCOUNT_JSON ? JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON) : null; } catch { return null; } })(),
   serverless: !!(env.VERCEL || env.SERVERLESS),

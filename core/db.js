@@ -96,7 +96,8 @@ CREATE TABLE IF NOT EXISTS media (
   lead_id ${d.big} NOT NULL,
   message_id ${d.big},
   mime TEXT NOT NULL,
-  data ${d.blob} NOT NULL,
+  data ${d.blob},
+  storage_path TEXT,
   created_at ${d.big} NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_media_lead ON media(lead_id);
@@ -250,6 +251,10 @@ class Store {
     if (!mcols.includes('ext_id')) await this.d.exec('ALTER TABLE messages ADD COLUMN ext_id TEXT');
     if (!mcols.includes('claimed_at')) await this.d.exec(`ALTER TABLE messages ADD COLUMN claimed_at ${dialect.big}`);
     await this.d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_ext ON messages(ext_id)');
+    // Photos moved from the database to Supabase Storage: a row now holds either the bytes or the storage path.
+    const media = await this.d.tableColumns('media');
+    if (!media.includes('storage_path')) await this.d.exec('ALTER TABLE media ADD COLUMN storage_path TEXT');
+    if (this.d.kind === 'pg') await this.d.exec('ALTER TABLE media ALTER COLUMN data DROP NOT NULL');
   }
 
   // Runs fn(txStore) inside one transaction. Use the store handed to fn, not this one.
@@ -377,12 +382,12 @@ class Store {
   async countMessages(leadId) { return Number((await this.get('SELECT COUNT(*) c FROM messages WHERE lead_id=?', leadId)).c); }
 
   // ---- pictures the customer sent (kept here because Instagram's links expire) ----
-  async addMedia({ lead_id, message_id, mime, bytes }) {
-    return this.d.insert('INSERT INTO media(lead_id,message_id,mime,data,created_at) VALUES(?,?,?,?,?)', lead_id, message_id ?? null, mime, Buffer.from(bytes), now());
+  async addMedia({ lead_id, message_id, mime, bytes = null, path = null }) {
+    return this.d.insert('INSERT INTO media(lead_id,message_id,mime,data,storage_path,created_at) VALUES(?,?,?,?,?,?)', lead_id, message_id ?? null, mime, bytes ? Buffer.from(bytes) : null, path, now());
   }
   async getMedia(id) {
-    const r = await this.get('SELECT id, lead_id, message_id, mime, data FROM media WHERE id=?', id);
-    return r ? { ...r, data: Buffer.from(r.data) } : null;
+    const r = await this.get('SELECT id, lead_id, message_id, mime, data, storage_path FROM media WHERE id=?', id);
+    return r ? { ...r, data: r.data ? Buffer.from(r.data) : null } : null;
   }
   // message id -> media id, for the leads asked about
   async mediaIndex(leadIds) {

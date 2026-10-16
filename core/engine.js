@@ -49,6 +49,7 @@ class Engine extends EventEmitter {
     this.summarizing = new Set();
     this.calSyncing = new Set();
     this.calendar = null; // set by createApp
+    this.photos = null; // set by createApp: Supabase Storage for customers' photos
     this.pending = new Set();
     this.defer = null; // set by the serverless entry: keeps the function alive until background work ends
     this.stats = { turns: 0, llmFallbacks: 0, sendFailures: 0 };
@@ -201,7 +202,11 @@ class Engine extends EventEmitter {
       if (this.store.isDuplicate(e)) return { leadId: lead.id, duplicate: true };
       throw e;
     }
-    if (media) await this.store.addMedia({ lead_id: lead.id, message_id: messageId, mime: media.mime, bytes: media.bytes });
+    if (media) {
+      // storage first (it has its own space); the database only if storage is off or refuses the upload
+      const path = this.photos ? await this.photos.put(lead.id, media.mime, media.bytes) : null;
+      await this.store.addMedia({ lead_id: lead.id, message_id: messageId, mime: media.mime, bytes: path ? null : media.bytes, path });
+    }
     const meta = { ...lead.meta };
     if (meta.flags && meta.flags.stalled) { meta.flags = { ...meta.flags }; delete meta.flags.stalled; }
     await this.store.updateLead(lead.id, { last_inbound_at: Date.now(), meta });

@@ -11,6 +11,7 @@ const { Telegram } = require('./telegram');
 const { Instagram } = require('./instagram');
 const { Scheduler } = require('./scheduler');
 const { Calendar, GoogleCalendar } = require('./calendar');
+const { PhotoStore } = require('./storage');
 const { Simulator } = require('./simulator');
 
 const SEED_DESIGNERS = [
@@ -35,6 +36,7 @@ async function createApp(config, { store, llmOverride, fetchImpl, debounceMs, lo
   });
   const calendar = new Calendar({ google: new GoogleCalendar({ account: config.googleServiceAccount, fetchImpl, log }), settings, log });
   engine.calendar = calendar;
+  engine.photos = new PhotoStore(config.storage, { fetchImpl, log });
   const telegram = new Telegram({ token: config.telegramToken, engine, store, settings, config, log, fetchImpl });
   engine.transports.telegram = telegram.transport;
   const instagram = new Instagram({ cfg: config.instagram, engine, store, config, log, fetchImpl });

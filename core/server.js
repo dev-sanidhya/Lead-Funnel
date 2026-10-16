@@ -322,8 +322,12 @@ function createHandler(app) {
   route('GET', '/api/media/:id', async (req, res, { params }) => {
     const m = await store.getMedia(Number(params.id));
     if (!m) throw new HttpError(404, 'Not found');
+    // the bytes live in the database, or in Supabase Storage whose address is never shown to the browser
+    let bytes = m.data;
+    if (!bytes && m.storage_path) { const f = await engine.photos.get(m.storage_path); bytes = f && f.bytes; }
+    if (!bytes) throw new HttpError(404, 'Photo unavailable');
     res.writeHead(200, { 'Content-Type': m.mime, 'Cache-Control': 'private, max-age=86400', 'Content-Disposition': 'inline', 'X-Content-Type-Options': 'nosniff' });
-    res.end(m.data);
+    res.end(bytes);
   });
   route('GET', '/api/leads/:id', async (req, res, { params }) => {
     const lead = await store.getLead(Number(params.id));

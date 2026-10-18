@@ -621,7 +621,7 @@ class Engine extends EventEmitter {
       `About: ${briefFor(lead, s)}`,
       lead.stage_reason ? `Why: ${lead.stage_reason}` : '',
       lead.summary ? `Notes: ${lead.summary}` : (lead.notes ? `Notes: ${lead.notes}` : ''),
-      lead.tg_username ? `${lead.channel === 'instagram' ? 'Instagram' : 'Telegram'}: @${lead.tg_username}` : (lead.channel === 'instagram' ? 'Channel: Instagram DM' : ''),
+      lead.tg_username ? `${lead.channel === 'instagram' ? 'Instagram' : lead.channel === 'facebook' ? 'Facebook' : 'Telegram'}: @${lead.tg_username}` : (lead.channel === 'instagram' ? 'Channel: Instagram DM' : lead.channel === 'facebook' ? 'Channel: Facebook Messenger' : ''),
       lead.phone ? `Phone: ${lead.phone}` : '',
       `Open: ${this.config.publicUrl}/admin#lead=${lead.id}`,
     ].filter(Boolean).join('\n');

@@ -26,7 +26,7 @@ async function withMedia(store, leadId, messages) {
 }
 
 function createHandler(app) {
-  const { config, store, settings, engine, telegram, instagram, scheduler, simulator, llm, calendar } = app;
+  const { config, store, settings, engine, telegram, instagram, facebook, scheduler, simulator, llm, calendar } = app;
   const sessionKey = crypto.createHmac('sha256', `${config.adminPassword}|${config.intakeSecret}`).update('session-v1').digest('hex');
   const hits = new Map();
   const started = Date.now();
@@ -297,6 +297,28 @@ function createHandler(app) {
     const { targets, local } = instagram.split(payload);
     for (const url of targets) engine.bg(instagram.forward(url, raw, req.headers['x-hub-signature-256']));
     if (local.entry.length) engine.bg(instagram.handleWebhook(local));
+  });
+  // Facebook Messenger webhook for the Page (same signing rules, signed with the Facebook app secret)
+  route('GET', '/webhook/facebook', { public: true }, async (req, res, { query }) => {
+    const challenge = facebook.verifyChallenge(query);
+    if (challenge === null) return send(res, 403, { error: 'Verification failed' });
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end(challenge);
+  });
+  route('POST', '/webhook/facebook', { public: true }, async (req, res) => {
+    const raw = await readRaw(req);
+    if (!facebook.validSignature(raw, req.headers['x-hub-signature-256'])) {
+      console.warn(`[facebook] webhook REJECTED (bad or missing signature, ${raw.length} bytes). Check FACEBOOK_APP_SECRET.`);
+      return send(res, 401, { error: 'Bad signature' });
+    }
+    let payload;
+    try { payload = JSON.parse(raw.toString('utf8')); } catch { return send(res, 400, { error: 'Bad JSON' }); }
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    console.log(`[facebook] webhook received: ${JSON.stringify(payload).slice(0, 300)}`);
+    res.end('EVENT_RECEIVED');
+    if (payload.object !== 'page') return;
+    const { local } = facebook.split(payload);
+    if (local.entry.length) engine.bg(facebook.handleWebhook(local));
   });
   route('POST', '/api/login', { public: true }, async (req, res) => {
     limit(req, 'login', 10);

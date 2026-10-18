@@ -66,7 +66,7 @@ function streak(lead) {
   return { followups: same ? s.followups || 0 : 0, drips: same ? s.drips || 0 : 0 };
 }
 
-function isInstagram(lead) { return lead.channel === 'instagram'; }
+function isInstagram(lead) { return lead.channel === 'instagram' || lead.channel === 'facebook'; } // both have the same 24 hour reply window
 // The last moment the assistant may message this lead (Infinity when there is no such window).
 function windowEnd(lead) { return isInstagram(lead) ? (lead.last_inbound_at || 0) + IG_WINDOW : Infinity; }
 

@@ -9,6 +9,7 @@ const { Agent } = require('./agent');
 const { Engine } = require('./engine');
 const { Telegram } = require('./telegram');
 const { Instagram } = require('./instagram');
+const { Facebook } = require('./facebook');
 const { Scheduler } = require('./scheduler');
 const { Calendar, GoogleCalendar } = require('./calendar');
 const { PhotoStore } = require('./storage');
@@ -41,10 +42,12 @@ async function createApp(config, { store, llmOverride, fetchImpl, debounceMs, lo
   engine.transports.telegram = telegram.transport;
   const instagram = new Instagram({ cfg: config.instagram, engine, store, config, log, fetchImpl });
   engine.transports.instagram = instagram.transport;
+  const facebook = new Facebook({ cfg: config.facebook, engine, store, config, log, fetchImpl });
+  engine.transports.facebook = facebook.transport;
   const scheduler = new Scheduler({ engine, store, settings, instagram, log });
   const simulator = new Simulator({ engine, store, settings, llm, log });
   if (seed && !(await store.listDesigners()).length) for (const d of SEED_DESIGNERS) await store.saveDesigner(d);
-  return { config, store, settings, llm, agent, engine, telegram, instagram, scheduler, simulator, calendar };
+  return { config, store, settings, llm, agent, engine, telegram, instagram, facebook, scheduler, simulator, calendar };
 }
 
 module.exports = { createApp };

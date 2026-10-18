@@ -11,14 +11,14 @@ const MIN = 60000;
 // Can the AI still message this lead? Instagram only allows replies within 24h of
 // the customer's last message; the margin keeps us from racing the deadline.
 function windowOpen(lead, now = Date.now(), marginMs = HOUR) {
-  if (lead.channel !== 'instagram') return true;
+  if (lead.channel !== 'instagram' && lead.channel !== 'facebook') return true;
   if (!lead.last_inbound_at) return false;
   return now - lead.last_inbound_at < 24 * HOUR - marginMs;
 }
 
 // Hours left in the messaging window (Instagram only), or null if there is no window.
 function windowHoursLeft(lead, now = Date.now()) {
-  if (lead.channel !== 'instagram' || !lead.last_inbound_at) return null;
+  if ((lead.channel !== 'instagram' && lead.channel !== 'facebook') || !lead.last_inbound_at) return null;
   return Math.max(0, (24 * HOUR - (now - lead.last_inbound_at)) / HOUR);
 }
 

@@ -17,11 +17,12 @@ const { STAGE_LABELS } = require('./qualify');
 
 const STATUSES = ['new', 'contacted', 'closed'];
 const clip = (v, n) => String(v == null ? '' : v).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim().slice(0, n);
-const SOURCE_LABEL = { instagram: 'Instagram DM', telegram: 'Telegram', web: 'Website chatbot' };
+const SOURCE_LABEL = { instagram: 'Instagram DM', facebook: 'Facebook Messenger', telegram: 'Telegram', web: 'Website chatbot' };
 
 function sourceOf(lead) {
   if (lead.channel === 'web') return 'Website chatbot';
   if (lead.channel === 'instagram') return 'Instagram DM';
+  if (lead.channel === 'facebook') return 'Facebook Messenger';
   if (lead.source === 'form' || lead.source === 'google-form') return 'Enquiry form';
   return SOURCE_LABEL[lead.channel] || 'Chat';
 }
@@ -37,7 +38,7 @@ function toCrmLead(lead, messages, settings, media = new Map()) {
     name: lead.name || '',
     phone: lead.phone || '',
     email: lead.email || '',
-    contact: lead.phone || lead.email || (lead.tg_username ? `@${lead.tg_username}` : (lead.channel === 'instagram' ? 'Instagram DM' : '')),
+    contact: lead.phone || lead.email || (lead.tg_username ? `@${lead.tg_username}` : (lead.channel === 'instagram' ? 'Instagram DM' : lead.channel === 'facebook' ? 'Facebook Messenger' : '')),
     projectType: lead.scope || lead.project_type || '',
     bhk: lead.property || '',
     location: lead.city || '',

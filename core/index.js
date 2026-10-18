@@ -25,6 +25,7 @@ async function main() {
   if (recovered) console.log(`[engine] resuming ${recovered} unprocessed conversation(s)`);
   app.scheduler.start();
   await app.instagram.start();
+  await app.facebook.start();
   try {
     await app.telegram.start();
     if (app.telegram.botUsername) console.log(`[telegram] chat link    https://t.me/${app.telegram.botUsername}?start=gform`);

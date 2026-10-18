@@ -43,6 +43,8 @@ function chunk(text, size = MAX_TEXT) {
 class Instagram {
   constructor({ cfg, engine, store, config, log = console, fetchImpl }) {
     this.cfg = cfg;
+    this.channel = 'instagram'; // Facebook Messenger reuses this class with channel 'facebook'
+    this.prefix = 'ig:';
     this.engine = engine;
     this.store = store;
     this.config = config;
@@ -224,12 +226,12 @@ class Instagram {
   }
 
   // ---------- sending ----------
-  igsid(lead) { return String(lead.chat_id).replace(/^ig:/, ''); }
+  igsid(lead) { return String(lead.chat_id).slice(this.prefix.length); }
 
   get transport() {
     return {
       send: (lead, text, opts = {}) => this.sendText(lead, text, opts),
-      typing: (chatId) => this.api('POST', '/me/messages', { body: { recipient: { id: String(chatId).replace(/^ig:/, '') }, sender_action: 'typing_on' } }, { retries: 1 }).catch(() => {}),
+      typing: (chatId) => this.api('POST', '/me/messages', { body: { recipient: { id: String(chatId).slice(this.prefix.length) }, sender_action: 'typing_on' } }, { retries: 1 }).catch(() => {}),
       sendRaw: async () => {}, // team alerts go through Telegram or the webhook, not Instagram
     };
   }
@@ -327,7 +329,8 @@ class Instagram {
   async handleEvent(ev, igId) {
     const senderId = ev.sender && String(ev.sender.id);
     if (!senderId || senderId === igId) return; // our own account
-    const chatId = `ig:${senderId}`;
+    if (!ev.message && !ev.postback && !ev.referral) return; // read receipts, deliveries and reactions need no answer
+    const chatId = `${this.prefix}${senderId}`;
     const ref = (ev.referral && ev.referral.ref) || (ev.postback && ev.postback.referral && ev.postback.referral.ref) || (ev.message && ev.message.referral && ev.message.referral.ref) || null;
 
     let profile = {};
@@ -335,13 +338,13 @@ class Instagram {
     if (!known) profile = await this.profile(senderId);
     const prof = { first_name: (profile.name || '').split(/\s+/)[0] || null, username: profile.username || null };
 
-    if (ref) await this.engine.linkReferral(chatId, ref, prof, 'instagram');
+    if (ref) await this.engine.linkReferral(chatId, ref, prof, this.channel);
 
     if (ev.message) {
       if (ev.message.is_echo) return; // messages sent from our own account/app
       const text = typeof ev.message.text === 'string' ? ev.message.text.trim() : '';
       if (!text) {
-        const lead = (await this.store.getLeadByChat(chatId)) || (await this.engine.bindChat(chatId, prof, { channel: 'instagram', source: 'instagram' })).lead;
+        const lead = (await this.store.getLeadByChat(chatId)) || (await this.engine.bindChat(chatId, prof, { channel: this.channel, source: this.channel })).lead;
         const types = (Array.isArray(ev.message.attachments) ? ev.message.attachments : []).map((a) => String((a && a.type) || '').toLowerCase());
         const kind = types.find((t) => MEDIA[t]);
         // Instagram also sends empty companion events (for example 0.4 seconds after a message that contains a
@@ -358,7 +361,7 @@ class Instagram {
           for (const [i, a] of shots.entries()) {
             const img = await this.fetchImage(a.payload.url);
             if (!img) continue;
-            await this.engine.receiveImage({ channel: 'instagram', chatId, bytes: img.bytes, mime: img.mime, profile: prof, externalId: ev.message.mid ? `${ev.message.mid}${i ? `:${i}` : ''}` : null, token: ref });
+            await this.engine.receiveImage({ channel: this.channel, chatId, bytes: img.bytes, mime: img.mime, profile: prof, externalId: ev.message.mid ? `${ev.message.mid}${i ? `:${i}` : ''}` : null, token: ref });
             handled++;
           }
           if (handled) return;
@@ -371,15 +374,15 @@ class Instagram {
         await this.engine.deliver(id).catch(() => {});
         return;
       }
-      await this.engine.receive({ channel: 'instagram', chatId, text, profile: prof, externalId: ev.message.mid || null, token: ref });
+      await this.engine.receive({ channel: this.channel, chatId, text, profile: prof, externalId: ev.message.mid || null, token: ref });
       return;
     }
     if (ev.postback) {
       // Ice breaker taps arrive as postbacks; treat the tapped question as the customer's message.
       const text = String(ev.postback.title || ev.postback.payload || '').trim();
-      if (text) await this.engine.receive({ channel: 'instagram', chatId, text, profile: prof, externalId: ev.postback.mid || null, token: ref });
+      if (text) await this.engine.receive({ channel: this.channel, chatId, text, profile: prof, externalId: ev.postback.mid || null, token: ref });
     }
   }
 }
 
-module.exports = { Instagram, InstagramError, chunk, WINDOW_MS };
+module.exports = { Instagram, InstagramError, chunk, WINDOW_MS, HUMAN_AGENT_MS };

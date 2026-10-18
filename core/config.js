@@ -60,6 +60,16 @@ module.exports = {
     // This map hands the events of other accounts on to the deployment that owns them: {"<account id>":"https://other-deployment/webhook/instagram"}.
     forward: (() => { try { const m = env.INSTAGRAM_FORWARD ? JSON.parse(env.INSTAGRAM_FORWARD) : {}; return Object.fromEntries(Object.entries(m).filter(([id, u]) => /^\d+$/.test(id) && /^https:\/\//.test(u))); } catch { return {}; } })(),
   },
+  // Facebook Messenger for one Page (Messenger Platform). The Page access token does not expire.
+  facebook: {
+    accessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN || '',
+    appSecret: env.FACEBOOK_APP_SECRET || '',
+    verifyToken: env.FACEBOOK_VERIFY_TOKEN || '',
+    pageId: (env.FACEBOOK_PAGE_ID || '').trim(),
+    handle: (env.FACEBOOK_PAGE_HANDLE || '').replace(/^@/, ''),
+    apiVersion: env.FACEBOOK_API_VERSION || 'v23.0',
+    forward: {},
+  },
   // Cloudflare Workers AI (preferred when CF_* are set) via its OpenAI-compatible
   // endpoint; otherwise any OpenAI-compatible provider (defaults to Groq).
   llm: useCloudflare

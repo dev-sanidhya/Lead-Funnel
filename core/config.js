@@ -50,6 +50,7 @@ module.exports = {
   instagram: {
     accessToken: env.INSTAGRAM_ACCESS_TOKEN || '',
     appSecret: env.INSTAGRAM_APP_SECRET || '',
+    appId: (env.INSTAGRAM_APP_ID || '').trim(),
     verifyToken: env.INSTAGRAM_VERIFY_TOKEN || '',
     handle: (env.INSTAGRAM_HANDLE || '').replace(/^@/, ''),
     apiVersion: env.INSTAGRAM_API_VERSION || 'v23.0',

@@ -83,6 +83,14 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .top-actions { display: flex; align-items: center; gap: 6px; }
 .live { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 12.5px; margin-right: 6px; }
 .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 var(--green-soft); animation: pulse 2.4s infinite; }
+.live.bad { color: var(--danger); }
+.live.bad i { background: var(--danger); animation: none; }
+.banner { display: flex; align-items: center; justify-content: space-between; gap: 14px 18px; flex-wrap: wrap; padding: 14px 18px; margin-bottom: 14px; background: var(--danger-soft); box-shadow: none; }
+.banner[hidden] { display: none; }
+.banner-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 260px; }
+.banner-text b { font-size: 15px; font-weight: 600; }
+.banner-text span { color: var(--text-2); font-size: 13.5px; }
+.banner .btn { text-decoration: none; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--green-soft); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 
 /* ---------- buttons and controls ---------- */

@@ -126,7 +126,22 @@
     bar.className = pct >= 95 ? 'full' : pct >= 80 ? 'warn' : '';
     $('txt' + which).textContent = fmtBytes(used) + ' of ' + fmtBytes(limit) + extra;
   }
-  function loadAll() { return loadLeads().then(loadUsage); }
+  // Instagram connection: a green "Live" dot while it works, a red banner with a Reconnect button when Instagram ends the session.
+  function loadInstagram() {
+    return api('/api/crm/instagram').then(function (s) {
+      var ok = !!s.connected;
+      $('igLive').classList.toggle('bad', !ok);
+      $('igLiveTxt').textContent = ok ? (s.username ? 'Instagram connected' : 'Live') : 'Instagram disconnected';
+      $('igBanner').hidden = ok;
+      if (!ok) {
+        $('igReconnect').hidden = !s.can_connect;
+        $('igBannerText').textContent = s.can_connect
+          ? 'Arty cannot answer Instagram messages until you reconnect. It takes about 20 seconds.'
+          : 'Arty cannot answer Instagram messages right now. Please contact your agency to reconnect.';
+      }
+    }).catch(function () {});
+  }
+  function loadAll() { return loadLeads().then(loadUsage).then(loadInstagram); }
 
   // ---------- list ----------
   function visibleLeads() {
@@ -432,6 +447,15 @@
     if (m) openLead(Number(m[1]));
   });
   setInterval(function () { if (!document.hidden) loadLeads(); }, 6000);
-  setInterval(function () { if (!document.hidden) loadUsage(); }, 60000);
+  setInterval(function () { if (!document.hidden) { loadUsage(); loadInstagram(); } }, 60000);
+  // Coming back from Instagram's approval page.
+  (function () {
+    var m = location.search.match(/[?&]ig=(\w+)/);
+    if (!m) return;
+    var why = (location.search.match(/[?&]m=([^&]+)/) || [])[1];
+    var msgs = { connected: 'Instagram is connected again', denied: 'Instagram was not connected. You can try again any time.', expired: 'That link timed out. Please tap Reconnect again.', failed: why ? decodeURIComponent(why) : 'Could not connect Instagram. Please try again.' };
+    toast(msgs[m[1]] || 'Done');
+    history.replaceState(null, '', '/crm');
+  })();
   document.addEventListener('visibilitychange', function () { if (!document.hidden) loadAll(); });
 })();

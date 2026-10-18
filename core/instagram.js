@@ -95,6 +95,8 @@ class Instagram {
         const rateLimited = [4, 17, 32, 613].includes(code) || res.status === 429;
         if (rateLimited) { lastErr = new InstagramError(msg, { status: res.status, code }); await sleep(1500 * 2 ** attempt); continue; }
         if (res.status >= 500) { lastErr = new InstagramError(msg, { status: res.status, code }); await sleep(500 * 2 ** attempt); continue; }
+        // A dead token is noticed on the first failed call, so the inbox can ask the studio to reconnect.
+        if (code === 190) { this.status.connected = false; this.status.lastError = msg; this.probed = { at: Date.now(), value: { connected: false, reason: 'expired', error: msg } }; }
         throw new InstagramError(msg, { permanent: true, status: res.status, code });
       } catch (e) {
         if (e instanceof InstagramError && e.permanent) throw e;
@@ -139,6 +141,68 @@ class Instagram {
   }
 
   tokenInfo() { return this.store.kvGet('ig_token_info', {}); }
+
+  // ---------- "Connect Instagram" (the studio re-authorises its own account, no token pasting) ----------
+  get canConnect() { return !!(this.cfg.appId && this.cfg.appSecret); }
+
+  // Where the studio is sent to approve the app on Instagram's own page.
+  connectUrl({ redirectUri, state }) {
+    const q = new URLSearchParams({
+      client_id: this.cfg.appId, redirect_uri: redirectUri, response_type: 'code', state, force_reauth: 'true',
+      scope: 'instagram_business_basic,instagram_business_manage_messages',
+    });
+    return `https://www.instagram.com/oauth/authorize?${q}`;
+  }
+
+  // Trades the code Instagram sent back for a long-lived (60 day) token and starts using it straight away.
+  async completeConnect({ code, redirectUri }) {
+    const json = async (res) => res.json().catch(() => ({}));
+    const fail = (d, fallback) => new InstagramError((d && (d.error_message || (d.error && d.error.message))) || fallback, { permanent: true });
+    const d1 = await json(await this.fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      body: new URLSearchParams({ client_id: this.cfg.appId, client_secret: this.cfg.appSecret, grant_type: 'authorization_code', redirect_uri: redirectUri, code }),
+    }));
+    const short = d1.access_token || (d1.data && d1.data[0] && d1.data[0].access_token);
+    if (!short) throw fail(d1, 'Instagram did not accept that sign-in');
+    const d2 = await json(await this.fetch(`https://graph.instagram.com/access_token?${new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: this.cfg.appSecret, access_token: short })}`));
+    if (!d2.access_token) throw fail(d2, 'Could not get a long-lived token');
+    const me = await json(await this.fetch(`${this.base}/me?${new URLSearchParams({ fields: 'user_id,username', access_token: d2.access_token })}`));
+    if (!me.user_id) throw fail(me, 'Could not read the Instagram account');
+    // Never let the wrong account take over this studio's inbox.
+    if (this.cfg.accountId && String(me.user_id) !== String(this.cfg.accountId)) {
+      throw new InstagramError(`That was @${me.username || 'another account'}. Please sign in with the studio's own Instagram account.`, { permanent: true });
+    }
+    const now = Date.now();
+    await this.store.kvSet('ig_token', d2.access_token);
+    await this.store.kvSet('ig_token_info', { refreshedAt: now, expiresAt: now + (d2.expires_in || 5184000) * 1000, from: fingerprint(this.cfg.accessToken) });
+    this.storedToken = d2.access_token;
+    this.tokenLoadedAt = now;
+    this.me = me;
+    this.probed = null;
+    this.status.connected = true;
+    this.status.lastError = null;
+    try { await this.subscribe(); } catch (e) { this.log.warn('[instagram] subscribe after reconnect failed:', e.message); }
+    return { username: me.username, expiresAt: now + (d2.expires_in || 5184000) * 1000 };
+  }
+
+  // Is the stored token still accepted by Instagram right now? Cached briefly so the inbox can ask often.
+  async probe({ maxAgeMs = 60000 } = {}) {
+    if (this.probed && Date.now() - this.probed.at < maxAgeMs) return this.probed.value;
+    let value;
+    try {
+      await this.loadToken({ maxAgeMs: 0 });
+      if (!this.token) value = { connected: false, reason: 'not_configured' };
+      else {
+        const me = await this.api('GET', '/me', { query: { fields: 'user_id,username' } }, { retries: 1 });
+        this.me = me;
+        value = { connected: true, username: me.username };
+      }
+    } catch (e) {
+      value = { connected: false, reason: e.code === 190 ? 'expired' : 'error', error: e.message };
+    }
+    this.probed = { at: Date.now(), value };
+    return value;
+  }
 
   // Subscribe this account to the webhook fields we handle.
   async subscribe() {

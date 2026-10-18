@@ -514,6 +514,7 @@ function createHandler(app) {
   });
 
   require('./websitecrm').mount({ route, send, readBody, limit, HttpError, store, settings, engine, config });
+  require('./igconnect').mountInstagramConnect({ route, send, instagram, config });
 
   // Simulator, scheduler, integrations
   route('POST', '/api/sim/run', async (req, res) => {

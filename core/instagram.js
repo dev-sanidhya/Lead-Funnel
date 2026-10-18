@@ -14,6 +14,7 @@
 const crypto = require('node:crypto');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const fingerprint = (token) => crypto.createHash('sha256').update(String(token || '')).digest('hex').slice(0, 16);
 const WINDOW_MS = 24 * 3600 * 1000;
 const HUMAN_AGENT_MS = 7 * 24 * 3600 * 1000;
 const MAX_TEXT = 950;
@@ -56,7 +57,12 @@ class Instagram {
   get token() { return this.storedToken || this.cfg.accessToken; }
   async loadToken({ maxAgeMs = 60000 } = {}) {
     if (this.tokenLoadedAt && Date.now() - this.tokenLoadedAt < maxAgeMs) return this.token;
-    this.storedToken = await this.store.kvGet('ig_token', null);
+    const stored = await this.store.kvGet('ig_token', null);
+    const info = await this.store.kvGet('ig_token_info', {});
+    // A token pasted into the environment after the stored one was refreshed must win (the stored one is
+    // stale, and may be dead). Rows written before this check carry no fingerprint and stay trusted.
+    const replaced = info && info.from && this.cfg.accessToken && info.from !== fingerprint(this.cfg.accessToken);
+    this.storedToken = replaced ? null : stored;
     this.tokenLoadedAt = Date.now();
     return this.token;
   }
@@ -128,7 +134,7 @@ class Instagram {
     if (!res.ok || !data.access_token) throw new InstagramError((data.error && data.error.message) || 'Token refresh failed', { permanent: true });
     await this.store.kvSet('ig_token', data.access_token);
     this.storedToken = data.access_token;
-    await this.store.kvSet('ig_token_info', { refreshedAt: Date.now(), expiresAt: Date.now() + (data.expires_in || 5184000) * 1000 });
+    await this.store.kvSet('ig_token_info', { refreshedAt: Date.now(), expiresAt: Date.now() + (data.expires_in || 5184000) * 1000, from: fingerprint(this.cfg.accessToken) });
     return { refreshed: true, expires_in: data.expires_in };
   }
 
